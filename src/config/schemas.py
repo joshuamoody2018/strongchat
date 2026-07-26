@@ -1,5 +1,68 @@
 """JSON schemas for LLM response validation"""
 
+INTENT_CLASSIFICATION_SCHEMA = {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "title": "IntentClassificationResponse",
+    "description": "Structured classification of user intent for general query understanding",
+    "properties": {
+        "query_analysis": {
+            "type": "object",
+            "properties": {
+                "original_query": {"type": "string"},
+                "query_complexity": {
+                    "type": "string",
+                    "enum": ["simple", "moderate", "complex"],
+                    "description": "How many distinct intents appear in the query"
+                },
+                "core_questions": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Core questions the user is asking"
+                },
+                "context_clues": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                }
+            },
+            "required": ["original_query", "query_complexity", "core_questions", "context_clues"]
+        },
+        "intents": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "intent_id": {"type": "string"},
+                    "framing": {
+                        "type": "object",
+                        "properties": {
+                            "perspective": {"type": "string"},
+                            "context": {"type": "string"},
+                            "approach": {"type": "string"}
+                        },
+                        "required": ["perspective", "context", "approach"]
+                    },
+                    "keywords": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Keywords for search and anchoring"
+                    },
+                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                    "is_primary": {"type": "boolean"}
+                },
+                "required": ["intent_id", "framing", "keywords", "confidence", "is_primary"]
+            },
+            "minItems": 1,
+            "maxItems": 5
+        },
+        "recommended_search_approach": {
+            "type": "string",
+            "description": "Recommended approach for combining multiple intents"
+        }
+    },
+    "required": ["query_analysis", "intents", "recommended_search_approach"]
+}
+
 INTENT_DISAMBIGUATION_SCHEMA = {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",

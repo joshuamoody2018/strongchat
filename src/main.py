@@ -3,7 +3,14 @@ import os
 import uuid
 import sqlite3
 from datetime import datetime
+import sys
+sys.path.insert(0, 'src')
+
 from services.sqlite.database import ChatDatabase
+from services.llm.wrapper import LLMWrapper
+from services.session import ChatSession
+from services.llm.aimessage import AIMessage
+from config.cache import GlobalReferenceCache
 
 try:
     from dotenv import load_dotenv
@@ -12,76 +19,14 @@ except ImportError:
     DOTENV_AVAILABLE = False
     print("Warning: python-dotenv not available. Using fallback environment loading.")
 
-try:
-    import requests
-    REQUESTS_AVAILABLE = True
-except ImportError:
-    REQUESTS_AVAILABLE = False
-    print("Warning: requests not available. API functionality will be limited.")
-
 # Load environment variables
 if DOTENV_AVAILABLE:
     load_dotenv()
 
-def call_openrouter_api(prompt, model_slug="openai/gpt-3.5-turbo"):
-    if not REQUESTS_AVAILABLE:
-        return "Error: requests library not available. Install with: pip install requests"
-    
-    api_key = os.getenv('OPENROUTER_API_KEY')
-    if not api_key or api_key == 'your_openrouter_api_key_here':
-        return "Error: OpenRouter API key not configured. Please update your .env file."
-    
-    url = "https://openrouter.ai/api/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost:8000",
-        "X-Title": "SQLite Chat App"
-    }
-    
-    data = {
-        "model": model_slug,
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    
-    try:
-        response = requests.post(url, json=data, headers=headers)
-        response.raise_for_status()
-        return response.json()['choices'][0]['message']['content']
-    except Exception as e:
-        return f"Error calling API: {str(e)}"
-
-def get_message_intent(message_text):
-    if not REQUESTS_AVAILABLE:
-        # Simple fallback intent detection
-        message_lower = message_text.lower()
-        # Use word boundaries to avoid partial matches
-        import re
-        if re.search(r'\bhello\b|\bhi\b|\bhey\b|\bgreetings\b', message_lower):
-            return 'greeting'
-        elif re.search(r'\b\?|\bwhat\b|\bhow\b|\bwhy\b|\bwhen\b|\bwhere\b', message_lower):
-            return 'question'
-        elif re.search(r'\bbye\b|\bgoodbye\b|\bquit\b|\bexit\b', message_lower):
-            return 'goodbye'
-        elif re.search(r'\bhelp\b|\bassist\b|\bsupport\b', message_lower):
-            return 'help'
-        else:
-            return 'statement'
-    
-    intents_model = os.getenv('MODEL_SLUG_INTENTS', 'openai/gpt-3.5-turbo')
-    
-    # Simple intent detection - in a real app, you'd use a proper classification model
-    prompt = f"""Analyze the following message and return the primary intent as a single word or short phrase:
-    Message: "{message_text}"
-    
-    Possible intents: greeting, question, statement, command, goodbye, help
-    
-    Intent:"""
-    
-    return call_openrouter_api(prompt, intents_model).strip().lower()
-
 def main():
     db = ChatDatabase()
+    cache = GlobalReferenceCache()
+    llm_wrapper = LLMWrapper()
     
     print("SQLite Chat Application")
     print("Type 'quit' to exit, 'new' to create new session, 'sessions' to list sessions")
@@ -98,9 +43,15 @@ def main():
             elif user_input.lower() == 'new':
                 session_name = input("Enter session name: ").strip()
                 if session_name:
-                    current_session = db.create_session(session_name)
-                    print(f"Created new session: {current_session}")
-                    print(f"Session name: {session_name}")
+                    session_uuid = db.create_session(session_name)
+                    current_session = ChatSession(
+                        uuid=session_uuid,
+                        name=session_name,
+                        created_by="user",
+                        created_at=datetime.now()
+                    )
+                    print(f"Created new session: {current_session.uuid}")
+                    print(f"Session name: {current_session.name}")
             elif user_input.lower() == 'sessions':
                 sessions = db.get_sessions()
                 print("\nSessions:")
@@ -110,14 +61,22 @@ def main():
                 # Check if it's a valid UUID
                 try:
                     uuid.UUID(user_input)
-                    current_session = user_input
-                    session_name = db.get_session_name(current_session)
-                    print(f"Joined session: {current_session} ({session_name})")
+                    session_data = db.get_session_name(user_input)
+                    if session_data:
+                        current_session = ChatSession(
+                            uuid=user_input,
+                            name=session_data,
+                            created_by="user",
+                            created_at=datetime.now()
+                        )
+                        print(f"Joined session: {current_session.uuid} ({current_session.name})")
+                    else:
+                        print("Invalid session UUID. Type 'new' to create a session.")
                 except ValueError:
                     print("Invalid session UUID. Type 'new' to create a session.")
         
         else:
-            user_input = input(f"[{current_session}] > ").strip()
+            user_input = input(f"[{current_session.uuid}] > ").strip()
             
             if user_input.lower() == 'quit':
                 break
@@ -135,19 +94,77 @@ def main():
                 continue
             
             if user_input:
-                # Get AI response
-                ai_response = call_openrouter_api(user_input)
-                
-                # Store in database
-                message_uuid = db.create_message(current_session, user_input, ai_response)
-                
-                # Get intent
-                intent = get_message_intent(user_input)
-                db.create_intent(message_uuid, intent)
-                
-                print(f"AI: {ai_response}")
-                print(f"Intent: {intent}")
+                try:
+                    # Use LLM wrapper for intent classification
+                    intent_message = llm_wrapper.sync_call_api(
+                        message_type_slug="intent_classification",
+                        unique_prompt=user_input,
+                        session_uuid=current_session.uuid
+                    )
+                    
+                    # Add message to session
+                    current_session.add_message(intent_message)
+                    
+                    # Extract intent from parsed response using cached schema
+                    intent_config = cache.get_message_type("intent_classification")
+                    intent_data = intent_message.get_parsed_response(intent_config["request_schema"])
+                    intent = intent_data.get("intent", "unknown")
+                    confidence = intent_data.get("confidence", 0.0)
+                    
+                    print(f"Intent: {intent} (confidence: {confidence:.2f})")
+                    
+                    # For demonstration, use a simple response
+                    if intent == "greeting":
+                        ai_response = f"Hello! I'm here to help you with biblical questions. What would you like to know?"
+                    elif intent == "question":
+                        ai_response = f"I understand you're asking about: '{user_input}'. Let me help you with that biblical question."
+                    elif intent == "goodbye":
+                        ai_response = "Goodbye! Feel free to come back anytime with your biblical questions."
+                    else:
+                        ai_response = f"I understand you said: '{user_input}'. How can I help you today?"
+                    
+                    # Create AI response message
+                    ai_message = AIMessage(
+                        session_uuid=current_session.uuid,
+                        message_type_slug="llm_response",
+                        unique_prompt=ai_response
+                    )
+                    ai_message.mark_success(ai_response)
+                    current_session.add_message(ai_message)
+                    
+                    # Store messages in database
+                    db.create_message_with_type(
+                        session_uuid=current_session.uuid,
+                        message_type_slug="human_input",
+                        unique_prompt=user_input
+                    )
+                    db.create_message_with_type(
+                        session_uuid=current_session.uuid,
+                        message_type_slug="llm_response",
+                        unique_prompt=ai_response
+                    )
+                    
+                    print(f"AI: {ai_response}")
+                    
+                except Exception as e:
+                    print(f"Error: {e}")
+                    # Store error in database and session
+                    error_message = AIMessage(
+                        session_uuid=current_session.uuid,
+                        message_type_slug="error",
+                        unique_prompt=user_input
+                    )
+                    error_message.mark_failure(str(e))
+                    current_session.add_message(error_message)
+                    
+                    db.create_message_with_type(
+                        session_uuid=current_session.uuid,
+                        message_type_slug="error",
+                        unique_prompt=user_input,
+                        error_text=str(e)
+                    )
     
+    llm_wrapper.close()
     db.close()
     print("Goodbye!")
 

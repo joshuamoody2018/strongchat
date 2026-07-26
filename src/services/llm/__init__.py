@@ -1,24 +1,6 @@
-"""LLM service package initialization"""
+"""LLM service components"""
 
-from .client import LLMClient
-from .parser import ResponseParser, BaseResponseModel
-from .exceptions import (
-    LLMError, APITimeoutError, APIConnectionError, APIResponseError,
-    ResponseValidationError, ResponseParsingError, MaxRetriesExceededError,
-    ConfigurationError, ModelNotFoundError
-)
+from .aimessage import AIMessage
+from .wrapper import LLMWrapper
 
-__all__ = [
-    'LLMClient',
-    'ResponseParser',
-    'BaseResponseModel',
-    'LLMError',
-    'APITimeoutError',
-    'APIConnectionError',
-    'APIResponseError',
-    'ResponseValidationError',
-    'ResponseParsingError',
-    'MaxRetriesExceededError',
-    'ConfigurationError',
-    'ModelNotFoundError'
-]
+__all__ = ['AIMessage', 'LLMWrapper']
