@@ -12,8 +12,7 @@
   * `high-level.md` - 13-step pipeline overview
   * `reference.md` - Agent workflow and integration
   * `implementation-status.md` - Current progress tracking
-* `todo-next.md` - Next actionable items (Phase 1-5)
-* `todo-deferred.md` - Deferred items (error handling, async improvements)
+* `todo.md` - All actionable items (next steps and deferred tasks)
 
 ## Code Structure
 * `src/services/llm/` - LLM framework (client, parser, exceptions)
@@ -34,4 +33,4 @@
   - New pipeline steps implemented
   - Development conventions change
   - New services added to `src/services/`
-* **Refer to**: `todo-deferred.md` for planned update mechanism
+* **Refer to**: `todo.md` for planned update mechanism
