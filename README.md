@@ -1,3 +1,9 @@
+## Contributing & Licensing
+
+This project is licensed under the **CC BY-NC 4.0** license. Commercial use requires explicit approval. 
+
+By contributing to this repository, you agree to the terms of our [Contributor License Agreement (CLA)](CLA.md).
+
 # Dev Environment Setup — Contabo VPS
 
 Remote terminal-only dev environment on Ubuntu (Contabo VPS), driven from Windows + WSL.
