@@ -2,6 +2,16 @@
 
 This directory contains integration tests for the new database-driven LLM message system. Tests are designed to verify the complete workflow from database setup to API calls and message tracking.
 
+## Test Organization
+
+This test suite is organized into two main categories:
+
+### Integration Tests (`tests/`)
+Focus on the complete database-driven LLM message system workflow, testing how components work together in the full pipeline.
+
+### System Tests (`tests/system/`)
+Focus on individual components and specific scenarios, providing more granular testing of system parts and edge cases.
+
 ## Test Philosophy
 
 - **Message-level testing**: Tests focus on complete message workflows rather than individual components
@@ -11,25 +21,45 @@ This directory contains integration tests for the new database-driven LLM messag
 
 ## Test Structure
 
-### 1. Database Setup Tests (`test_database_setup.py`)
-- Verify new database schema creation
-- Test message types table population
-- Validate foreign key relationships
+### 1. Integration Tests (`/tests/`)
+Integration tests for the database-driven LLM message system:
 
-### 2. Message Workflow Tests (`test_message_workflow.py`)
-- Complete message lifecycle: creation → API call → parsing → storage
-- Test retry logic and error handling
-- Validate response parsing with schemas
+#### Integration Test Files:
+- **Database Setup Tests** (`test_database_setup.py`)
+  - Verify new database schema creation
+  - Test message types table population
+  - Validate foreign key relationships
+  
+- **Message Workflow Tests** (`test_message_workflow.py`)
+  - Complete message lifecycle: creation → API call → parsing → storage
+  - Test retry logic and error handling
+  - Validate response parsing with schemas
+  
+- **Integration Tests** (`test_integration.py`)
+  - End-to-end workflow tests
+  - Session management with multiple messages
+  - Message type routing and validation
 
-### 3. LLM Wrapper Tests (`test_llm_wrapper.py`)
-- API integration with retry logic
-- Configuration loading from database
-- Error handling and retry counting
+### 2. System Tests (`/tests/system/`)
+End-to-end system tests for individual components and scenarios:
 
-### 4. Integration Tests (`test_integration.py`)
-- End-to-end workflow tests
-- Session management with multiple messages
-- Message type routing and validation
+#### System Test Files:
+- **Final System Tests** (`test_final_system.py`)
+  - Test final system with concise prompts
+  - Verify complete intent classification workflow
+  
+- **Intent Classification Tests** (`test_intent.py`)
+  - Test the intent classification API directly
+  - Validate intent classification functionality
+  
+- ** API Tests** (`test_json_api.py`, `test_real_api.py`)
+  - Test real API calls with intent classification
+  - Validate JSON response parsing and validation
+  - Test different API scenarios and configurations
+  
+- **Cache Tests** (`test_refreshed_cache.py`)
+  - Test real API call with refreshed cache
+  - Verify cache refresh functionality
 
 ## Running Tests
 
@@ -37,8 +67,15 @@ This directory contains integration tests for the new database-driven LLM messag
 # Run all tests
 python -m pytest tests/ -v
 
+# Run integration tests only
+python -m pytest tests/ -v -k "not system"
+
+# Run system tests only  
+python -m pytest tests/system/ -v
+
 # Run specific test file
 python -m pytest tests/test_message_workflow.py -v
+python -m pytest tests/system/test_intent.py -v
 
 # Run with coverage
 python -m pytest tests/ --cov=src --cov-report=html
