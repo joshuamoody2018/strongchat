@@ -76,10 +76,17 @@ Response format:
   "recommended_search_approach": "brief description"
 }}"""
 
-# Future prompts can be added here
-# HYDE_GENERATION_PROMPT = """
-# Based on the following interpretation, generate a hypothetical biblical passage:
-# """
+HYDE_GENERATION_PROMPT = """You are given exactly one intent, serialized as JSON, that captures an interpretation of a user's question, along with keywords and themes.
+
+Intent:
+{query}
+
+Using only the information in this intent, write a 100-200 word hypothetical passage in the style of an English Bible: modern English prose with biblical cadence, as if it were a verse or short chapter that contains the answer. Do not include the original user query, and do not add commentary outside the passage.
+
+Respond with ONLY complete, valid JSON matching this schema:
+{{
+  "hyde_document": "<the hypothetical passage>"
+}}"""
 
 # RESPONSE_SYNTHESIS_PROMPT = """
 # """

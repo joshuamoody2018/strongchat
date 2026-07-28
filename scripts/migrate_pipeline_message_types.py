@@ -103,6 +103,20 @@ INTENT_GENERATION_ROW = (
     config.INTENT_GENERATION_PROMPT,
 )
 
+HYDE_GENERATION_ROW = (
+    'hyde_generation',
+    'HyDE Generation',
+    'programmatic',
+    json.dumps(config.HYDE_GENERATION_SCHEMA),
+    'openai/gpt-4.1-mini',
+    0.7,
+    '{"max_tokens": 400}',
+    3,
+    1,
+    'Hypothetical biblical passage generated from a single intent',
+    config.HYDE_GENERATION_PROMPT,
+)
+
 
 def backup_database(db_path: str) -> str:
     """Copy db_path to <db_path>.pre-pipeline.bak, overwriting any prior backup."""
@@ -128,6 +142,7 @@ def migrate(db_path: str) -> str:
     try:
         conn.executemany(INSERT_SQL, PIPELINE_MESSAGE_TYPES)
         conn.execute(INTENT_GENERATION_SQL, INTENT_GENERATION_ROW)
+        conn.execute(INTENT_GENERATION_SQL, HYDE_GENERATION_ROW)
         conn.execute(DEACTIVATE_SQL)
         conn.commit()
 

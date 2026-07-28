@@ -193,6 +193,20 @@ INTENT_GENERATION_SCHEMA = {
     "required": ["query_analysis", "intents", "recommended_search_approach"]
 }
 
+HYDE_GENERATION_SCHEMA = {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "title": "HydeGenerationResponse",
+    "description": "A single hypothetical biblical passage generated from a single intent",
+    "properties": {
+        "hyde_document": {
+            "type": "string",
+            "minLength": 50,
+            "description": "A 100-200 word hypothetical passage in modern English prose with biblical cadence"
+        }
+    },
+    "required": ["hyde_document"]
+}
+
 # Future schemas can be added here
-# HYDE_GENERATION_SCHEMA = {...}
 # RESPONSE_SYNTHESIS_SCHEMA = {...}
