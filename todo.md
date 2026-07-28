@@ -49,7 +49,9 @@
 
 ### Async Implementation
 - [ ] Replace sync HTTP calls with aiohttp for true async
-- [ ] Implement async database operations
+- [x] Create DatabasePort protocol and AsyncSQLiteDatabase adapter
+- [ ] Migrate LLMWrapper and BaseService to write messages through DatabasePort
+- [ ] Add async production database adapter (e.g., asyncpg) behind DatabasePort when hosted DB is chosen
 - [ ] Add async context managers for resource cleanup
 - [ ] Implement async batch processing for multiple queries
 - [ ] Add async queue for processing pipeline steps
