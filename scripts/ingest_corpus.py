@@ -148,15 +148,19 @@ async def _ingest_translation(
     # Record one summary message for the completed ingest.
     session_uuid = db.create_session("corpus-ingest", created_by="pipeline")
     base = BaseService(db.db_path)
-    base.record_message(
-        message_type_slug="corpus_ingest",
-        unique_prompt=json.dumps(
-            {"translation": slug, "verses": expected_verses, "collection": collection_name}
-        ),
-        session_uuid=session_uuid,
-        raw_response=json.dumps({"status": "ok", "dimension": 1536}),
-        num_tries=1,
-    )
+    try:
+        await base.record_message(
+            message_type_slug="corpus_ingest",
+            unique_prompt=json.dumps(
+                {"translation": slug, "verses": expected_verses, "collection": collection_name}
+            ),
+            session_uuid=session_uuid,
+            raw_response=json.dumps({"status": "ok", "dimension": 1536}),
+            num_tries=1,
+        )
+    finally:
+        base.llm.db.close()
+        await base.llm.db_port.close()
     print(f"{slug}: verified {actual_count} verses in {collection_name}")
 
 

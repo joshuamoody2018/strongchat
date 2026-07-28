@@ -22,9 +22,10 @@ class BaseService:
         """
         self.llm = LLMWrapper(db_path)
         self.db = self.llm.db
+        self.db_port = self.llm.db_port
         self.cache = self.llm.cache
 
-    def record_message(
+    async def record_message(
         self,
         message_type_slug: str,
         unique_prompt: str,
@@ -33,7 +34,7 @@ class BaseService:
         error_text: str = None,
         num_tries: int = 1,
     ) -> str:
-        """Persist a message row, returning its generated UUID.
+        """Persist a message row asynchronously, returning its generated UUID.
 
         Args:
             message_type_slug: Message type reference slug.
@@ -46,7 +47,7 @@ class BaseService:
         Returns:
             UUID string of the created message row.
         """
-        return self.db.create_message_with_type(
+        return await self.db_port.create_message_with_type(
             session_uuid=session_uuid,
             message_type_slug=message_type_slug,
             unique_prompt=unique_prompt,

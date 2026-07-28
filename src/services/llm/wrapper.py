@@ -9,6 +9,7 @@ from datetime import datetime
 
 from .aimessage import AIMessage
 from ..sqlite.database import ChatDatabase
+from services.database.adapters.sqlite import AsyncSQLiteDatabase
 from config.cache import GlobalReferenceCache
 from .exceptions import (
     APITimeoutError, APIConnectionError, APIResponseError,
@@ -27,6 +28,7 @@ class LLMWrapper:
             db_path: Path to the SQLite database file
         """
         self.db = ChatDatabase(db_path)
+        self.db_port = AsyncSQLiteDatabase(db_path)
         self.cache = GlobalReferenceCache()
         self.base_url = "https://openrouter.ai/api/v1"
         self.timeout = 30.0
@@ -102,7 +104,7 @@ class LLMWrapper:
                 aimessage.mark_success(raw_response)
                 
                 # Save successful message to database
-                self.db.create_message_with_type(
+                await self.db_port.create_message_with_type(
                     session_uuid=session_uuid,
                     message_type_slug=message_type_slug,
                     unique_prompt=unique_prompt,
@@ -122,7 +124,7 @@ class LLMWrapper:
                     await asyncio.sleep(backoff_time)
                 else:
                     # Final attempt failed - save failure to database
-                    self.db.create_message_with_type(
+                    await self.db_port.create_message_with_type(
                         session_uuid=session_uuid,
                         message_type_slug=message_type_slug,
                         unique_prompt=unique_prompt,
@@ -135,7 +137,7 @@ class LLMWrapper:
             except Exception as e:
                 # Other errors - mark failure and save
                 aimessage.mark_failure(str(e), increment_tries=True)
-                self.db.create_message_with_type(
+                await self.db_port.create_message_with_type(
                     session_uuid=session_uuid,
                     message_type_slug=message_type_slug,
                     unique_prompt=unique_prompt,
@@ -216,5 +218,11 @@ class LLMWrapper:
         )
     
     def close(self):
-        """Close database connection."""
+        """Close both synchronous and asynchronous database connections."""
         self.db.close()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(self.db_port.close())
+        else:
+            loop.run_until_complete(self.db_port.close())

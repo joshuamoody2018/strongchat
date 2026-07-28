@@ -100,7 +100,7 @@ class EmbeddingService(BaseService):
                     }
                 )
                 unique_prompt = json.dumps({"texts": texts})[:4000]
-                self.record_message(
+                await self.record_message(
                     message_type_slug="embedding_generation",
                     unique_prompt=unique_prompt,
                     session_uuid=session_uuid,
@@ -113,7 +113,7 @@ class EmbeddingService(BaseService):
         except Exception as exc:
             num_tries += getattr(exc, "_embedding_attempts", 1)
             if record and session_uuid is not None:
-                self.record_message(
+                await self.record_message(
                     message_type_slug="embedding_generation",
                     unique_prompt=json.dumps({"texts": texts})[:4000],
                     session_uuid=session_uuid,
