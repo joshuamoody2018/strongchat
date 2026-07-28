@@ -1,23 +1,22 @@
 #!/usr/bin/env python3
-"""Create new database schema with message_types and messages tables"""
+"""Create new database schema with ref_message_types and messages tables (schema only)"""
 
+import argparse
 import sqlite3
-import json
-from datetime import datetime
+
 
 def create_new_database(db_path: str = 'data/chat_database.db') -> None:
-    """Create database with new schema and populate initial message types."""
-    
+    """Create database with new schema. Seeding is populate_message_types.py's job."""
+
     # Drop existing tables if they exist
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
+
     print("Dropping existing tables...")
     cursor.execute("DROP TABLE IF EXISTS messages")
-    cursor.execute("DROP TABLE IF EXISTS message_types")
+    cursor.execute("DROP TABLE IF EXISTS ref_message_types")
     cursor.execute("DROP TABLE IF EXISTS sessions")
-    cursor.execute("DROP TABLE IF EXISTS intents")
-    
+
     # Create sessions table (keep existing)
     cursor.execute('''
         CREATE TABLE sessions (
@@ -27,10 +26,10 @@ def create_new_database(db_path: str = 'data/chat_database.db') -> None:
             created_by TEXT
         )
     ''')
-    
-    # Create message_types table (new)
+
+    # Create ref_message_types table (matches live schema)
     cursor.execute('''
-        CREATE TABLE message_types (
+        CREATE TABLE ref_message_types (
             slug TEXT PRIMARY KEY,
             step_name TEXT NOT NULL,
             creator_type TEXT NOT NULL,
@@ -40,10 +39,11 @@ def create_new_database(db_path: str = 'data/chat_database.db') -> None:
             additional_model_settings TEXT,
             max_retries INTEGER DEFAULT 3,
             is_active BOOLEAN DEFAULT TRUE,
-            description TEXT
+            description TEXT,
+            prompt_template TEXT
         )
     ''')
-    
+
     # Create messages table (new - replaces old messages)
     cursor.execute('''
         CREATE TABLE messages (
@@ -57,70 +57,21 @@ def create_new_database(db_path: str = 'data/chat_database.db') -> None:
             num_tries INTEGER DEFAULT 1,
             error_text TEXT,
             FOREIGN KEY (session_uuid) REFERENCES sessions (uuid),
-            FOREIGN KEY (message_type_slug) REFERENCES message_types (slug)
+            FOREIGN KEY (message_type_slug) REFERENCES ref_message_types (slug)
         )
     ''')
-    
-    conn.commit()
-    
-    # Populate initial message types
-    initial_message_types = [
-        {
-            "slug": "intent_classification",
-            "step_name": "Intent Classification",
-            "creator_type": "programmatic",
-            "request_schema": json.dumps({
-                "$schema": "http://json-schema.org/draft-07/schema#",
-                "type": "object",
-                "title": "IntentClassificationResponse",
-                "description": "Classification of user intent",
-                "properties": {
-                    "intent": {
-                        "type": "string",
-                        "description": "Primary intent classification",
-                        "enum": ["greeting", "question", "statement", "command", "goodbye", "help"]
-                    },
-                    "confidence": {
-                        "type": "number",
-                        "minimum": 0,
-                        "maximum": 1,
-                        "description": "Confidence score for the classification"
-                    }
-                },
-                "required": ["intent", "confidence"]
-            }),
-            "model_slug": "openai/gpt-3.5-turbo",
-            "temperature": 0.1,
-            "additional_model_settings": json.dumps({"max_tokens": 100}),
-            "max_retries": 3,
-            "is_active": True,
-            "description": "Classify user message intent"
-        }
-    ]
-    
-    print("Populating initial message types...")
-    for msg_type in initial_message_types:
-        cursor.execute('''
-            INSERT INTO message_types 
-            (slug, step_name, creator_type, request_schema, model_slug, temperature, 
-             additional_model_settings, max_retries, is_active, description)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            msg_type["slug"],
-            msg_type["step_name"],
-            msg_type["creator_type"],
-            msg_type["request_schema"],
-            msg_type["model_slug"],
-            msg_type["temperature"],
-            msg_type["additional_model_settings"],
-            msg_type["max_retries"],
-            msg_type["is_active"],
-            msg_type["description"]
-        ))
-    
+
     conn.commit()
     conn.close()
-    print("New database schema created and populated successfully!")
+    print("New database schema created successfully!")
+
 
 if __name__ == "__main__":
-    create_new_database()
+    parser = argparse.ArgumentParser(
+        description="Create new database schema (schema only, no seeding)")
+    parser.add_argument(
+        '--db-path',
+        default='data/chat_database.db',
+        help='Path to SQLite database file (default: data/chat_database.db)')
+    args = parser.parse_args()
+    create_new_database(args.db_path)
