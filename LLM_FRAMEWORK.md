@@ -14,15 +14,32 @@ The StrongChat LLM Framework provides a structured approach to handling LLM inte
    - `models.py`: Model configurations
 
 2. **Service Layer** (`src/services/`)
+   - `base.py`: Shared `BaseService` foundation (owns one `LLMWrapper`, DB, and cache)
    - `llm/`: LLM client and utilities
-     - `client.py`: Main LLM client with async support
-     - `parser.py`: JSON response parser with validation
+     - `wrapper.py`: Canonical recorded-path LLM client with async support
+     - `client.py`: Original LLM client (kept for compatibility)
+     - `aimessage.py`: JSON response parser and validation
      - `exceptions.py`: Custom exception classes
-   - `intent/`: Intent disambiguation service
+   - `intent/`: Intent generation service
    - `hyde/`: HyDE generation service
+   - `embeddings/`: Batched embedding service
+   - `vectordb/`: ChromaDB verse store
+   - `retrieval/`: HyDE → verse retrieval service
+   - `pipeline/`: Pipeline orchestrator
 
 3. **Data Layer** (`data/`)
    - SQLite database for structured intent storage
+
+### Canonical Recorded Path
+
+`LLMWrapper` (`src/services/llm/wrapper.py`) is the canonical LLM client for the pipeline. It records every call in the `messages` table and is the client inherited by `BaseService`. The older `LLMClient` (`src/services/llm/client.py`) is kept for compatibility but is not used by new services.
+
+The four recorded message types used by the HyDE-retrieval pipeline are:
+
+- `intent_generation`
+- `hyde_generation`
+- `embedding_generation`
+- `corpus_ingest`
 
 ## Design Decisions
 
@@ -193,10 +210,11 @@ python3 scripts/test_llm_framework.py
 
 ### Pipeline Steps
 
-1. **Intent Disambiguation** ✅
-2. **HyDE Generation** - Use intent output to generate hypothetical passages
-3. **Response Synthesis** - Combine retrieved passages with original query
-4. **Validation** - Fact-check responses against biblical text
+1. **Intent Generation** ✅
+2. **HyDE Generation** ✅
+3. **Embeddings / Retrieval** ✅
+4. **Response Synthesis** - Combine retrieved passages with original query
+5. **Validation** - Fact-check responses against biblical text
 
 ### Performance Optimizations
 

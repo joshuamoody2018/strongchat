@@ -8,63 +8,94 @@
 - **Status**: ✅ Complete
 - **Location**: `src/services/llm/`
 - **Components**:
-  - Async LLM client with aiohttp
+  - Async LLM wrapper (`LLMWrapper`) with aiohttp
   - JSON schema validation
   - Exponential backoff retry (3 max)
   - Error routing to stderr
-  - Response parser with validation
-- **Testing**: ✅ 6/6 parser tests passing
-- **Documentation**: ✅ Comprehensive docs created
+  - Response parser with validation (`AIMessage`, `parse_response`)
+- **Testing**: ✅ 6/6 parser tests passing, offline/online service tests passing
+- **Documentation**: ✅ Comprehensive docs in `LLM_FRAMEWORK.md`
 
 #### 2. Database Layer
 - **Status**: ✅ Complete
 - **Location**: `src/services/sqlite/`
 - **Components**:
   - Chat session management
-  - Message storage
-  - Intent tracking (ready for structured data)
-- **Testing**: ✅ CRUD operations validated
+  - Message storage with `ref_message_types` FK
+  - Intent tracking (structured)
+  - Foreign-key enforcement enabled per connection
+- **Testing**: ✅ CRUD operations validated, migration tests passing
 - **Database**: ✅ Schema implemented and tested
 
 #### 3. Configuration System
 - **Status**: ✅ Complete
 - **Location**: `src/config/`
 - **Components**:
-  - JSON schemas for response validation
-  - Pipeline-agnostic prompt templates
+  - JSON schemas for response validation (`schemas.py`)
+  - Pipeline-agnostic prompt templates (`prompts.py`)
   - Centralized configuration management
 
-### 🚧 In Progress Components
+#### 4. Intent Generation Service
+- **Status**: ✅ Complete
+- **Location**: `src/services/intent/`, `src/config/schemas.py`, `src/config/prompts.py`
+- **Components**:
+  - `IntentService.generate_intents(query, session_uuid)`
+  - `INTENT_GENERATION_SCHEMA` with 1-5 intents, `keywords_explicit`, `keywords_inferred`, `themes`, `is_primary`
+  - Records one `intent_generation` message per call
+- **Testing**: ✅ Offline mocked test + live system test passing
 
-#### 1. Intent Disambiguation Service
-- **Status**: 🚧 Framework ready, needs integration
-- **Location**: `src/services/intent/` (planned)
-- **Dependencies**: LLM framework
-- **Requirements**:
-  - Plain-language query disambiguation
-  - Zero biblical vocabulary
-  - Multiple interpretive framings
-- **Next Steps**: Connect to LLM client, update database schema
+#### 5. HyDE Generation Service
+- **Status**: ✅ Complete
+- **Location**: `src/services/hyde/`
+- **Components**:
+  - `HydeService.generate_for_intents(intents, session_uuid)`
+  - `HYDE_GENERATION_SCHEMA` (`hyde_document` string, min length 50)
+  - Bias-isolated prompt: receives only one serialized intent, never the original query
+  - Parallel generation via `asyncio.gather`, per-intent failure capture
+- **Testing**: ✅ Offline and live tests passing
 
-#### 2. Main Application Integration
-- **Status**: 🚧 Ready for migration
-- **Location**: `src/main.py`
-- **Current**: Simple intent detection
-- **Target**: Structured intent disambiguation
-- **Dependencies**: Intent service completion
+#### 6. Embeddings Service
+- **Status**: ✅ Complete
+- **Location**: `src/services/embeddings/`
+- **Components**:
+  - `EmbeddingService.embed_texts(texts, session_uuid, record, chunk_size)`
+  - Batched OpenRouter `/v1/embeddings` calls (default chunk size 256)
+  - Retry/backoff for transient `APITimeoutError` / `APIConnectionError`
+  - Records one summary `embedding_generation` message per call (no raw vectors)
+- **Testing**: ✅ Offline tests passing
+
+#### 7. Verse Store / Corpus Ingest
+- **Status**: ✅ Complete
+- **Location**: `src/services/vectordb/`, `scripts/ingest_corpus.py`
+- **Components**:
+  - `VerseStore` wrapper around `chromadb.PersistentClient`
+  - Cosine HNSW collections (`kjv_verses`, `web_verses`)
+  - Idempotent upsert via `create_batches` + `collection.upsert`
+  - `corpus_ingest` summary message recorded after each translation ingest
+- **Testing**: ✅ Full KJV + WEB ingest verified, semantic check passes
+
+#### 8. Retrieval Service
+- **Status**: ✅ Complete
+- **Location**: `src/services/retrieval/`
+- **Components**:
+  - `RetrievalService.search(hyde_docs, session_uuid, top_k, translations)`
+  - Embeds valid HyDE docs in one `embedding_generation` call
+  - Fans out Chroma queries across `(doc, translation)` pairs via `asyncio.gather`
+  - Returns structured hits with `id`, `text`, `reference`, `distance`
+- **Testing**: ✅ Offline tests passing
+
+#### 9. Pipeline Orchestrator
+- **Status**: ✅ Complete
+- **Location**: `src/services/pipeline/`, `scripts/run_pipeline.py`
+- **Components**:
+  - `PipelineRunner` composes `IntentService`, `HydeService`, `EmbeddingService`, `VerseStore`, `RetrievalService`
+  - `PipelineResult` dataclass with `session_uuid`, `query`, `intents`, `hyde_docs`, `results`
+  - CLI runner: `scripts/run_pipeline.py`
+- **Testing**: ✅ Live end-to-end test passing
 
 ### 📋 Planned Components
 
-#### 1. HyDE Generation Service
-- **Status**: 📋 Planned
-- **Location**: `src/services/hyde/` (planned)
-- **Dependencies**: Intent disambiguation service
-- **Requirements**:
-  - Biblical prose generation
-  - N×M structure (N intents × M passages)
-  - Integration with step 3 of pipeline
-
-#### 2. RRF Implementation
+#### 1. RRF Implementation
 - **Status**: 📋 Planned
 - **Location**: `src/services/rrf/` (planned)
 - **Requirements**:
@@ -72,23 +103,34 @@
   - Cross-intent merging (step 6)
   - Score normalization and fusion
 
-#### 3. Macula Integration
+#### 2. Macula Integration
 - **Status**: 📋 Planned
 - **Requirements**:
   - NT: Macula Greek lookup (step 7)
   - OT: Macula Hebrew lookup (TBD)
   - Strong's concordance integration
 
+#### 3. Synthesis, Evaluation, and Validation
+- **Status**: 📋 Planned
+- **Requirements**:
+  - Response synthesis (step 10)
+  - Evaluator loop (step 11)
+  - Fact validation (step 12)
+  - Final response (step 13)
+
 ## Task Tracking
 
 ### todo-next.md
 - ✅ Framework implementation
-- 🚧 Intent service integration
-- 🚧 Database schema update
-- 🚧 Main application migration
-- 📋 HyDE service development
+- ✅ Intent service integration
+- ✅ HyDE schema + prompt
+- ✅ Embeddings service
+- ✅ Retrieval service
+- ✅ Corpus/vector store
+- ✅ Pipeline orchestrator
 - 📋 RRF implementation
 - 📋 Macula integration
+- 📋 Synthesis / evaluator / validator
 
 ### todo-deferred.md
 - Error handling improvements
@@ -100,17 +142,22 @@
 
 ## Critical Dependencies
 
-### 1. Intent Disambiguation → HyDE Generation
+### 1. Intent Generation → HyDE Generation
 - Intent service output required for HyDE input
-- Structured framings needed for N×M generation
+- Structured intents with `intent_id`, `interpretation`, `keywords_*`, `themes` needed for N×M generation
 
-### 2. Database → All Services
-- Structured intent storage required for auditability
-- Session management for conversation context
+### 2. HyDE Generation → Embeddings → Retrieval
+- HyDE documents feed `EmbeddingService.embed_texts`
+- `RetrievalService` queries `VerseStore` per `(doc, translation)` pair
 
-### 3. LLM Framework → Intent Service
-- Framework provides validated LLM interactions
-- Error handling and retry logic essential
+### 3. LLM Framework → All LLM Services
+- `LLMWrapper` provides validated, retry-aware LLM calls
+- Error handling and audit logging essential
+
+### 4. Database → All Services
+- `ChatDatabase` stores session and messages
+- `GlobalReferenceCache` loads `ref_message_types` rows
+- `BaseService` exposes shared wrapper, cache, and DB to every service
 
 ## Risk Assessment
 
@@ -118,42 +165,45 @@
 - Database schema evolution
 - LLM framework integration
 - Configuration management
+- Intent/HyDE/retrieval pipeline
 
 ### Medium Risk
-- Intent service performance
 - JSON schema validation edge cases
 - Error handling robustness
+- RRF algorithm implementation
 
 ### High Risk
-- RRF algorithm implementation
 - Macula external dependencies
-- Pipeline step integration timing
+- Synthesis/evaluator loop convergence
+- Pipeline step 5-13 integration timing
 
 ## Success Metrics
 
 ### Technical Metrics
 - ✅ Framework test coverage: 100%
-- 🚧 Integration test coverage: Target 90%
-- 📋 Pipeline step completion: 2/13 implemented
+- ✅ Integration test coverage: live pipeline end-to-end passing
+- ✅ Pipeline step completion: 4/13 implemented (input, intent generation, HyDE generation, retrieval)
 
 ### Functional Metrics
 - ✅ Database operations: All working
-- 🚧 Intent disambiguation: Framework ready
-- 📋 End-to-end pipeline: In progress
+- ✅ Intent generation: Working and audited
+- ✅ HyDE generation: Working and audited
+- ✅ Embeddings: Working and audited
+- ✅ Retrieval: Working and audited
+- 📋 End-to-end synthesis: In progress
 
 ## Next Milestones
 
 ### Short Term (1-2 weeks)
-1. Complete intent service integration
-2. Update main application with new framework
-3. Implement structured intent storage
+1. Implement RRF ranking (steps 5-6)
+2. Update retrieval service to feed ranked results into synthesis
 
 ### Medium Term (1-2 months)
-1. Develop HyDE generation service
-2. Implement RRF algorithm
-3. Add Macula integration
+1. Add Macula integration (step 7)
+2. Implement response synthesis (step 10)
+3. Add evaluator loop (step 11)
 
 ### Long Term (3-6 months)
-1. Complete full pipeline integration
+1. Complete full pipeline integration (steps 5-13)
 2. Add production monitoring
 3. Optimize performance and scalability

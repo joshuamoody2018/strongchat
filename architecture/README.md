@@ -9,9 +9,9 @@ StrongChat is a biblical search system using LLMs with two-level RRF (Reciprocal
 ### 13-Step Pipeline
 
 1. **Input** — User's raw text
-2. **Intent Generation** — LLM produces N candidate topic/theme framings (auditable inference point)
-3. **HyDE Generation** — M hypothetical passages per intent (N×M total documents)
-4. **Parallel Retrieval** — Embed each HyDE doc, search against English translations, top-K per doc
+2. ✅ **Intent Generation** — LLM produces N candidate topic/theme framings (auditable inference point)
+3. ✅ **HyDE Generation** — M hypothetical passages per intent (N×M total documents)
+4. ✅ **Parallel Retrieval** — Embed each HyDE doc, search against English translations, top-K per doc
 5. **RRF Level 1** — Merge/rerank M result sets within each intent → one ranked list per intent
 6. **RRF Level 2** — Merge/rerank N per-intent lists → single candidate verse set
 7. **Macula Lookup** — Pull lemma/Strong's data for candidate set (NT: Macula Greek, OT: TBD)
@@ -46,6 +46,7 @@ StrongChat is a biblical search system using LLMs with two-level RRF (Reciprocal
 - **Components**:
   - Chat session management
   - Message storage
+  - Foreign-key enforcement
   - Intent tracking (structured)
 - **Location**: `services/sqlite/database.py`
 
@@ -56,27 +57,65 @@ StrongChat is a biblical search system using LLMs with two-level RRF (Reciprocal
   - Pipeline-agnostic prompt templates
 - **Location**: `LLM_FRAMEWORK.md`
 
-### 🚧 In Progress Components
-
-#### Intent Disambiguation Service
+#### Intent Generation Service (`src/services/intent/`)
 - **Purpose**: Plain-language query disambiguation (step 2)
-- **Status**: Framework ready, needs service integration
+- **Status**: ✅ Implemented
+- **Key Files**: `src/services/intent/service.py`, `src/config/schemas.py`, `src/config/prompts.py`
 - **Key Requirements**:
   - Zero biblical vocabulary in intent analysis
   - Multiple interpretive framings per query
   - Structured output for HyDE generation
 
-### 📋 Planned Components
-
-#### HyDE Generation Service
+#### HyDE Generation Service (`src/services/hyde/`)
 - **Purpose**: Hypothetical document generation (step 3)
-- **Dependencies**: Intent disambiguation output
+- **Status**: ✅ Implemented
+- **Key File**: `src/services/hyde/service.py`
 - **Requirements**:
   - Biblical prose generation
   - N×M structure (N intents × M passages each)
+  - Bias-isolated prompts (only intent data, never the original query)
+
+#### Embeddings Service (`src/services/embeddings/`)
+- **Purpose**: Batched embedding generation for HyDE docs and corpus
+- **Status**: ✅ Implemented
+- **Key File**: `src/services/embeddings/service.py`
+- **Key Features**:
+  - Batched OpenRouter `/v1/embeddings` calls
+  - Retry/backoff for transient errors
+  - Summary-only recording (no raw vectors persisted)
+
+#### Verse Store / Corpus Ingest (`src/services/vectordb/`, `scripts/ingest_corpus.py`)
+- **Purpose**: ChromaDB-backed storage for Bible verse embeddings
+- **Status**: ✅ Implemented
+- **Key Files**: `src/services/vectordb/store.py`, `scripts/ingest_corpus.py`
+- **Key Features**:
+  - Persistent ChromaDB collections (`kjv_verses`, `web_verses`)
+  - Cosine HNSW indexing
+  - Idempotent upserts
+
+#### Retrieval Service (`src/services/retrieval/`)
+- **Purpose**: Embed HyDE docs and query verse collections (step 4)
+- **Status**: ✅ Implemented
+- **Key File**: `src/services/retrieval/service.py`
+- **Key Features**:
+  - Single `embedding_generation` call per HyDE set
+  - Parallel Chroma queries across `(doc, translation)` pairs
+  - Structured hits with reference and distance
+
+#### Pipeline Orchestrator (`src/services/pipeline/`, `scripts/run_pipeline.py`)
+- **Purpose**: Compose intent → HyDE → retrieval into one runnable flow
+- **Status**: ✅ Implemented
+- **Key Files**: `src/services/pipeline/runner.py`, `scripts/run_pipeline.py`
+- **Key Features**:
+  - Shared `EmbeddingService` injected into retrieval
+  - `PipelineResult` dataclass
+  - CLI runner
+
+### 📋 Planned Components
 
 #### RRF Implementation
 - **Purpose**: Two-level ranking fusion (steps 5-6)
+- **Location**: `src/services/rrf/` (planned)
 - **Requirements**:
   - Intra-intent ranking
   - Cross-intent merging
@@ -84,8 +123,14 @@ StrongChat is a biblical search system using LLMs with two-level RRF (Reciprocal
 
 #### Macula Integration
 - **Purpose**: Original language data lookup (step 7)
+- **Location**: TBD
 - **Status**: NT via Macula Greek, OT TBD
 - **Requirements**: Strong's concordance integration
+
+#### Synthesis, Evaluator, Validator, and Final Response
+- **Purpose**: Generate and verify the final answer (steps 10-13)
+- **Location**: TBD
+- **Status**: 📋 Planned
 
 ## Directory Structure
 
@@ -95,12 +140,18 @@ src/
 │   ├── schemas.py           # JSON schemas
 │   └── prompts.py           # Prompt templates
 ├── services/
+│   ├── base.py              # Shared BaseService foundation
 │   ├── llm/                 # LLM framework
 │   │   ├── client.py        # Async LLM client
 │   │   ├── parser.py        # JSON response parser
 │   │   └── exceptions.py   # Error handling
 │   ├── sqlite/              # Database operations
-│   └── intent/              # Intent disambiguation (planned)
+│   ├── intent/              # Intent generation service
+│   ├── hyde/                # HyDE generation service
+│   ├── embeddings/          # Batched embedding service
+│   ├── vectordb/            # ChromaDB verse store
+│   ├── retrieval/           # HyDE → verse retrieval service
+│   └── pipeline/            # Pipeline orchestrator
 └── main.py                  # Application entry point
 
 data/
@@ -108,11 +159,14 @@ data/
 
 scripts/
 ├── test_*.py                # Test suites
-└── create_database.py       # Database utilities
+├── create_database.py       # Database utilities
+├── ingest_corpus.py         # Bible corpus ingest into ChromaDB
+└── run_pipeline.py          # CLI pipeline runner
 
 architecture/
-├── high-level.md           # This document
-├── llm-framework.md        # LLM framework details
+├── high-level.md            # This document
+├── llm-framework.md         # LLM framework details
+├── implementation-status.md # Current progress tracking
 └── [component-specific docs]
 ```
 
@@ -135,11 +189,14 @@ architecture/
 
 ## Next Steps
 
-1. **Intent Service Integration** - Connect LLM framework to intent disambiguation
-2. **Database Schema Update** - Store structured intent data
-3. **HyDE Service Development** - Use intent output for hypothetical passages
-4. **RRF Implementation** - Two-level ranking system
-5. **Macula Integration** - Original language data lookup
+1. **RRF Implementation** - Two-level ranking system (steps 5-6)
+2. **Macula Integration** - Original language data lookup (step 7)
+3. **Graph Expansion** - Lemma-based/verse-graph traversal (step 8)
+4. **Re-rank/Organize** - Consolidate retrieval set (step 9)
+5. **Synthesis** - Frontier model answers with citations (step 10)
+6. **Evaluator Loop** - Fresh LLM completeness check (step 11)
+7. **Validator** - Programmatic + LLM fact-check (step 12)
+8. **Final Response** - Return answer to user (step 13)
 
 ## References
 

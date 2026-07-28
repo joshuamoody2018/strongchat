@@ -10,10 +10,10 @@
 - [x] Create src/services/llm/exceptions.py for error handling
 - [x] Create src/services/llm/__init__.py and src/config/__init__.py
 
-### Phase 2: Intent Service Refactor
-- [ ] Update src/services/intent/disambiguator.py to use new framework
-- [ ] Update src/services/intent/models.py with response models
-- [ ] Update database schema to store structured intent data
+### Phase 2: Intent Service Refactor ✅
+- [x] Update src/services/intent/disambiguator.py to use new framework
+- [x] Update src/services/intent/models.py with response models
+- [x] Update database schema to store structured intent data
 
 ### Phase 3: Testing
 - [ ] Create comprehensive tests for response parsing
@@ -29,10 +29,13 @@
 - [ ] Update main.py to use new LLM client
 
 ### Phase 5: Expand Framework
-- [ ] Add HYDE_GENERATION_SCHEMA and prompt
+- [x] Add HYDE_GENERATION_SCHEMA and prompt
 - [ ] Add RESPONSE_SYNTHESIS_SCHEMA and prompt
 - [ ] Create additional response models for different pipeline steps
-- [ ] Implement model routing (cheap intent model vs expensive HyDE model)
+- [x] Implement model routing (cheap intent model vs expensive HyDE model)
+- [x] Add EmbeddingService for batched OpenRouter embeddings
+- [x] Add RetrievalService for HyDE → Chroma verse search
+- [x] Add PipelineRunner orchestrator and CLI runner
 
 ## Deferred Error Handling & Async Implementation
 

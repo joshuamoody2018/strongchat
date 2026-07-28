@@ -23,10 +23,16 @@ An orchestrated work plan is mid-execution. **Resume it before starting any new 
 * `todo.md` - All actionable items (next steps and deferred tasks)
 
 ## Code Structure
-* `src/services/llm/` - LLM framework (client, parser, exceptions)
+* `src/services/llm/` - LLM framework (wrapper, client, parser, exceptions)
+* `src/services/base.py` - Shared `BaseService` foundation
 * `src/services/sqlite/` - Database operations and session management
+* `src/services/intent/` - Intent generation service
+* `src/services/hyde/` - HyDE generation service
+* `src/services/embeddings/` - Batched embedding service
+* `src/services/vectordb/` - ChromaDB verse store
+* `src/services/retrieval/` - HyDE → verse retrieval service
+* `src/services/pipeline/` - Pipeline orchestrator
 * `src/config/` - JSON schemas and prompt templates
-* `src/services/intent/` - Intent disambiguation (planned)
 * `scripts/` - Testing and utility scripts
 
 ## Key Entry Points
