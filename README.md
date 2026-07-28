@@ -65,17 +65,41 @@ set -a; . ./.env; set +a
 
 ## Testing
 
-Run the integration and system tests from the repository root:
+Run the script-style tests directly:
 
 ```bash
-.venv/bin/python -m pytest tests/system/
-.venv/bin/python -m pytest tests/scripts/
+.venv/bin/python tests/scripts/<file>.py
 ```
 
-Unit-style tests at the top level of `tests/` can be run with:
+For example:
 
 ```bash
-.venv/bin/python -m pytest tests/
+.venv/bin/python tests/scripts/test_database_queries.py
+.venv/bin/python tests/scripts/test_intent_service.py
+.venv/bin/python tests/scripts/test_pipeline_offline.py
+```
+
+Live system tests need an `OPENROUTER_API_KEY` in your environment:
+
+```bash
+set -a; . ./.env; set +a
+.venv/bin/python tests/system/<file>.py
+```
+
+For example:
+
+```bash
+.venv/bin/python tests/system/test_intent_generation.py
+.venv/bin/python tests/system/test_hyde_generation.py
+.venv/bin/python tests/system/test_pipeline_e2e.py
+```
+
+Top-level tests in `tests/` are runnable with `unittest`:
+
+```bash
+.venv/bin/python -m unittest tests.test_database_setup
+.venv/bin/python -m unittest tests.test_message_workflow
+.venv/bin/python -m unittest tests.test_integration
 ```
 
 ## Documentation
