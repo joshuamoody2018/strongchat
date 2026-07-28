@@ -120,6 +120,79 @@ INTENT_DISAMBIGUATION_SCHEMA = {
     "required": ["query_analysis", "interpretive_framings", "recommended_framing"]
 }
 
+INTENT_GENERATION_SCHEMA = {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "title": "IntentGenerationResponse",
+    "description": "Structured generation of multiple plain-language intents for a user query",
+    "properties": {
+        "query_analysis": {
+            "type": "object",
+            "properties": {
+                "original_query": {"type": "string"},
+                "core_questions": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Core questions the user is asking"
+                },
+                "context_clues": {
+                    "type": "array",
+                    "items": {"type": "string"}
+                }
+            },
+            "required": ["original_query", "core_questions", "context_clues"]
+        },
+        "intents": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "intent_id": {"type": "string"},
+                    "interpretation": {
+                        "type": "string",
+                        "description": "Plain-language interpretation of what the user is asking"
+                    },
+                    "keywords_explicit": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Terms that appear verbatim in the user query"
+                    },
+                    "keywords_inferred": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Related terms that do NOT appear verbatim in the query"
+                    },
+                    "themes": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "minItems": 1,
+                        "maxItems": 3,
+                        "description": "One to three short theme labels for this intent"
+                    },
+                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                    "is_primary": {"type": "boolean"}
+                },
+                "required": [
+                    "intent_id",
+                    "interpretation",
+                    "keywords_explicit",
+                    "keywords_inferred",
+                    "themes",
+                    "confidence",
+                    "is_primary"
+                ]
+            },
+            "minItems": 1,
+            "maxItems": 5
+        },
+        "recommended_search_approach": {
+            "type": "string",
+            "description": "Recommended approach for combining or prioritizing generated intents"
+        }
+    },
+    "required": ["query_analysis", "intents", "recommended_search_approach"]
+}
+
 # Future schemas can be added here
 # HYDE_GENERATION_SCHEMA = {...}
 # RESPONSE_SYNTHESIS_SCHEMA = {...}

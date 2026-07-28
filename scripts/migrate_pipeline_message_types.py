@@ -12,7 +12,13 @@ Steps:
 Idempotent: safe to run multiple times against the same database.
 """
 import argparse
+import json
+import os
 import sqlite3
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+import config
 
 BACKUP_SUFFIX = '.pre-pipeline.bak'
 
@@ -76,6 +82,27 @@ DEACTIVATE_SQL = (
     "UPDATE ref_message_types SET is_active=0 WHERE slug='intent_disambiguation'"
 )
 
+INTENT_GENERATION_SQL = """
+INSERT OR REPLACE INTO ref_message_types
+  (slug, step_name, creator_type, request_schema, model_slug, temperature,
+   additional_model_settings, max_retries, is_active, description, prompt_template)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+"""
+
+INTENT_GENERATION_ROW = (
+    'intent_generation',
+    'Intent Generation',
+    'programmatic',
+    json.dumps(config.INTENT_GENERATION_SCHEMA),
+    'openai/gpt-4.1-mini',
+    0.2,
+    '{"max_tokens": 800}',
+    3,
+    1,
+    'Refined multi-intent generation for a user query',
+    config.INTENT_GENERATION_PROMPT,
+)
+
 
 def backup_database(db_path: str) -> str:
     """Copy db_path to <db_path>.pre-pipeline.bak, overwriting any prior backup."""
@@ -100,6 +127,7 @@ def migrate(db_path: str) -> str:
     conn = sqlite3.connect(db_path)
     try:
         conn.executemany(INSERT_SQL, PIPELINE_MESSAGE_TYPES)
+        conn.execute(INTENT_GENERATION_SQL, INTENT_GENERATION_ROW)
         conn.execute(DEACTIVATE_SQL)
         conn.commit()
 
