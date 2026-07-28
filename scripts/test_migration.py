@@ -26,6 +26,7 @@ EXPECTED_ACTIVE = {
     'embedding_generation',
     'error',
     'human_input',
+    'hyde_generation',
     'intent_classification',
     'intent_generation',
     'llm_response',
@@ -77,7 +78,7 @@ class TestPipelineMessageTypeMigration(unittest.TestCase):
             self.assertEqual(flags.get(slug), 1, f"{slug} should be active")
         for slug in EXPECTED_INACTIVE:
             self.assertEqual(flags.get(slug), 0, f"{slug} should be inactive")
-        self.assertEqual(len(flags), 8)
+        self.assertEqual(len(flags), 9)
 
     def test_new_row_field_values(self):
         """Spot-check the seeded rows carry the specified field values."""
@@ -133,6 +134,28 @@ class TestPipelineMessageTypeMigration(unittest.TestCase):
         self.assertIn('{query}', row['prompt_template'])
         self.assertIsNotNone(row['request_schema'])
         self.assertIn('IntentGenerationResponse', row['request_schema'])
+
+    def test_hyde_generation_row_values(self):
+        """The hyde_generation row carries the HyDE schema/prompt."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = dict(
+                conn.execute(
+                    "SELECT * FROM ref_message_types WHERE slug = ?",
+                    ('hyde_generation',),
+                ).fetchone()
+            )
+        self.assertEqual(row['step_name'], 'HyDE Generation')
+        self.assertEqual(row['creator_type'], 'programmatic')
+        self.assertEqual(row['model_slug'], 'openai/gpt-4.1-mini')
+        self.assertEqual(row['temperature'], 0.7)
+        self.assertEqual(row['max_retries'], 3)
+        self.assertEqual(row['is_active'], 1)
+        self.assertEqual(row['additional_model_settings'], '{"max_tokens": 400}')
+        self.assertIsNotNone(row['prompt_template'])
+        self.assertIn('{query}', row['prompt_template'])
+        self.assertIsNotNone(row['request_schema'])
+        self.assertIn('HydeGenerationResponse', row['request_schema'])
 
     def test_second_run_idempotent(self):
         """A second migration run must leave rows and counts unchanged."""
