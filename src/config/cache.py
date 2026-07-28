@@ -10,21 +10,32 @@ class GlobalReferenceCache:
     _instance = None
     _initialized = False
     
-    def __new__(cls):
+    def __new__(cls, db_path: Optional[str] = None):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
-    
-    def __init__(self):
+
+    def __init__(self, db_path: Optional[str] = None):
         if not self._initialized:
+            self._db_path = db_path or 'data/chat_database.db'
             self._initialize_cache()
             self._initialized = True
-    
+
+    @classmethod
+    def reset(cls, db_path: Optional[str] = None):
+        """Clear the singleton and re-instantiate, optionally against a new DB path.
+
+        Intended for fixture tests that need the cache pointed at a temp database.
+        """
+        cls._instance = None
+        cls._initialized = False
+        return cls(db_path)
+
     def _initialize_cache(self):
         """Load all reference data from database"""
         try:
             from services.sqlite.database import ChatDatabase
-            self.db = ChatDatabase()
+            self.db = ChatDatabase(self._db_path)
             self.ref_message_types = {}
             self._load_ref_message_types()
         except ImportError:

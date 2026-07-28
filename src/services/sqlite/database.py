@@ -17,6 +17,7 @@ class ChatDatabase:
         """
         self.db_path = db_path
         self.conn = sqlite3.connect(db_path)
+        self.conn.execute("PRAGMA foreign_keys = ON")
         self.cursor = self.conn.cursor()
     
     def create_session(self, name: str, created_by: str = "user") -> str:
