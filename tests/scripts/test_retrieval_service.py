@@ -17,7 +17,7 @@ import tempfile
 import unittest
 
 # Add src and scripts directories to path before any service imports.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 sys.path.insert(0, os.path.dirname(__file__))
 
 # BaseService -> LLMWrapper requires a non-placeholder OPENROUTER_API_KEY at

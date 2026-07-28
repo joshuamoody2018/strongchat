@@ -13,13 +13,13 @@ import tempfile
 import unittest
 
 # Add src and scripts directories to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
 from services.sqlite.database import ChatDatabase
 import migrate_pipeline_message_types as migration
 
-LIVE_DB = os.path.join(os.path.dirname(__file__), '..', 'data', 'chat_database.db')
+LIVE_DB = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'chat_database.db')
 
 EXPECTED_ACTIVE = {
     'corpus_ingest',

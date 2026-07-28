@@ -14,7 +14,7 @@ import unittest
 from unittest.mock import AsyncMock
 
 # Add src directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 from config.cache import GlobalReferenceCache
 from services.hyde import HydeService

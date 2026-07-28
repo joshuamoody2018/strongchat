@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 
 # Add src directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 from services.llm.client import LLMClient
 from services.llm.exceptions import MaxRetriesExceededError

@@ -18,7 +18,7 @@ import tempfile
 import unittest
 from unittest.mock import AsyncMock, patch
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from jsonschema import validate, ValidationError
 

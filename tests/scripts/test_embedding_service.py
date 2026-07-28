@@ -16,7 +16,7 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 # Add src directory to path before any service imports.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 # BaseService -> LLMWrapper requires a non-placeholder OPENROUTER_API_KEY at
 # import/instantiation time. Since these tests use an injected embed_fn, a

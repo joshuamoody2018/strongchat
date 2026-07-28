@@ -10,7 +10,7 @@ import sys
 import unittest
 
 # Add src directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 from jsonschema import validate, ValidationError
 from config import INTENT_GENERATION_SCHEMA, INTENT_GENERATION_PROMPT
