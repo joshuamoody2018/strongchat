@@ -1,199 +1,86 @@
 ## Contributing & Licensing
 
-This project is licensed under the **CC BY-NC 4.0** license. Commercial use requires explicit approval. 
+This project is licensed under the **CC BY-NC 4.0** license. Commercial use requires explicit approval.
 
 By contributing to this repository, you agree to the terms of our [Contributor License Agreement (CLA)](CLA.md).
 
-# Dev Environment Setup — Contabo VPS
-
-Remote terminal-only dev environment on Ubuntu (Contabo VPS), driven from Windows + WSL.
-
 ---
 
-## 1. SSH Access (local WSL → VPS)
+# StrongChat
 
-Generate a key in WSL Ubuntu:
-```bash
-ssh-keygen -t ed25519 -C "vps-key"
+StrongChat is a Bible verse retrieval and answer synthesis system built around a multi-step LLM pipeline. It disambiguates a user's question, generates Hypothetical Document Embeddings (HyDE), retrieves relevant verses from English and original-language biblical corpora, and synthesizes a grounded answer.
+
+## Features
+
+- **Intent disambiguation**: clarifies ambiguous or shorthand biblical questions before retrieval.
+- **HyDE generation**: produces hypothetical answer passages to improve semantic retrieval.
+- **Cross-language retrieval**: English semantic search with original-language grounding.
+- **Structured LLM outputs**: JSON-schema validation and recorded message history for auditability.
+- **Modular service architecture**: intent, HyDE, embedding, vector store, and retrieval services.
+
+## Directory Layout
+
+```
+architecture/     System design and architecture documentation
+src/              Source code and service implementations
+  services/       LLM framework, pipeline services, SQLite storage
+  config/         JSON schemas, prompt templates, model configs
+scripts/          Setup, utility, and pipeline scripts
+  setup_environment.sh    Bootstrap Python environment and dependencies
+  run_pipeline.py         Run the full retrieval pipeline
+tests/            Test suites
+  system/         System/integration tests
+  scripts/        Script-level tests
+data/             SQLite database and generated artifacts
 ```
 
-Copy it to the VPS (initial root access):
-```bash
-ssh-copy-id root@<contabo-ip>
-```
+## Prerequisites
 
-Local SSH config (`~/.ssh/config` in WSL):
-```
-Host vps
-    HostName <contabo-ip>
-    User joshua
-    IdentityFile ~/.ssh/id_ed25519
-    ServerAliveInterval 60
-```
+- Python 3.12 or newer
+- Ubuntu/Debian-based environment
+- Git
 
-Test:
-```bash
-ssh vps
-```
+## Installation
 
----
-
-## 2. Non-root user + sudo (on VPS, as root)
-
-```bash
-adduser joshua
-usermod -aG sudo joshua
-
-mkdir -p /home/joshua/.ssh
-cp ~/.ssh/authorized_keys /home/joshua/.ssh/authorized_keys
-chown -R joshua:joshua /home/joshua/.ssh
-chmod 700 /home/joshua/.ssh
-chmod 600 /home/joshua/.ssh/authorized_keys
-```
-
-Verify `ssh joshua@<ip>` and `sudo whoami` work **before** locking root down.
-
-Lock down `/etc/ssh/sshd_config`:
-```
-PermitRootLogin no
-PasswordAuthentication no
-```
-
-Restart SSH (Ubuntu service is named `ssh`, not `sshd`):
-```bash
-sudo sshd -t          # test config syntax first
-sudo systemctl restart ssh
-```
-
----
-
-## 3. Windows Terminal profile
-
-Add to Windows Terminal settings JSON:
-```json
-{
-    "name": "VPS",
-    "commandline": "wsl.exe -e ssh vps",
-    "startingDirectory": "%USERPROFILE%"
-}
-```
-
-Uses WSL's own `ssh` + `~/.ssh/config` — keeps keys/config consistent with the rest of the Linux tooling. Test `wsl.exe -e ssh vps` in plain `cmd.exe` first if the profile misbehaves.
-
----
-
-## 4. tmux (session persistence on VPS)
+Run the committed setup script to create a virtual environment and install dependencies:
 
 ```bash
-sudo apt install tmux -y
+bash scripts/setup_environment.sh
 ```
 
-Usage:
-```bash
-tmux new -s work        # start session
-# Ctrl-b d               # detach
-tmux attach -t work      # reattach later
-```
-
-Sessions survive disconnects/laptop sleep — processes keep running.
-
----
-
-## 5. Git + GitHub
+Then create a `.env` file in the project root with at least your OpenRouter API key:
 
 ```bash
-git config --global user.name "Joshua Moody"
-git config --global user.email "your@email.com"
+OPENROUTER_API_KEY="sk-or-..."
 ```
 
-Generate a separate SSH key on the VPS for GitHub:
-```bash
-ssh-keygen -t ed25519 -C "vps-github"
-cat ~/.ssh/id_ed25519.pub
-```
-Add the public key at GitHub → Settings → SSH and GPG keys.
+## Usage
 
-Test:
-```bash
-ssh -T git@github.com
-```
-
-New project → push to GitHub:
-```bash
-mkdir -p ~/projects/strongchat && cd ~/projects/strongchat
-git init
-echo "# strongchat" > README.md
-git add . && git commit -m "init"
-git branch -M main
-git remote add origin git@github.com:joshuamoody2018/strongchat.git
-git push -u origin main
-```
-
----
-
-## 6. OpenCode + OpenRouter
+Run the full pipeline against a question:
 
 ```bash
-curl -fsSL https://opencode.ai/install | bash
+set -a; . ./.env; set +a
+.venv/bin/python scripts/run_pipeline.py "your question"
 ```
 
-API key:
+## Testing
+
+Run the integration and system tests from the repository root:
+
 ```bash
-echo 'export OPENROUTER_API_KEY="sk-or-..."' >> ~/.bashrc
-source ~/.bashrc
+.venv/bin/python -m pytest tests/system/
+.venv/bin/python -m pytest tests/scripts/
 ```
 
-Config location and exact schema **not yet confirmed** — check `opencode --help` / `opencode auth login` for the current setup flow rather than assuming a hand-written config file. (Pending: finish this step and document the working config.)
+Unit-style tests at the top level of `tests/` can be run with:
 
----
-
-## 7. Neovim (LazyVim)
-
-Install Neovim (apt version is stale):
 ```bash
-curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz
-tar xzf nvim-linux-x86_64.tar.gz
-sudo mv nvim-linux-x86_64 /opt/nvim
-echo 'export PATH="$PATH:/opt/nvim/bin"' >> ~/.bashrc
-source ~/.bashrc
+.venv/bin/python -m pytest tests/
 ```
 
-Install LazyVim starter config:
-```bash
-git clone https://github.com/LazyVim/starter ~/.config/nvim
-rm -rf ~/.config/nvim/.git
-nvim   # auto-installs plugins on first launch, restart after
-```
+## Documentation
 
-**Dependencies required by LazyVim (Telescope + Treesitter):**
-```bash
-sudo apt install fd-find ripgrep build-essential -y
-
-# Ubuntu names the binary fdfind, not fd — symlink it
-mkdir -p ~/.local/bin
-ln -s $(which fdfind) ~/.local/bin/fd
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-If treesitter parsers fail to build after install:
-```
-:TSUpdate
-```
-
-**Basic keys:**
-- `Space` alone → command menu (leader key)
-- `Space ff` → find files
-- `Space fg` → grep project
-- `Space e` → file explorer
-- `:e filename` → open file directly
-- `i` insert / `Esc` exit insert / `:wq` save+quit / `:q!` quit no save
-
----
-
-# 8 Pip:
-sudo apt install python3-pip
-
-## Open items
-- [ ] Confirm OpenCode config schema and finish OpenRouter model setup
-- [ ] Pick working model IDs per task (cheap vs. heavy) via openrouter.ai/models
+- `architecture/high-level.md` — 13-step pipeline overview
+- `architecture/reference.md` — agent workflow and integration
+- `architecture/implementation-status.md` — current progress tracking
+- `todo.md` — implementation backlog and next steps
