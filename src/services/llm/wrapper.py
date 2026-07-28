@@ -218,7 +218,7 @@ class LLMWrapper:
         )
     
     def close(self):
-        """Close both synchronous and asynchronous database connections."""
+        """Close both synchronous and asynchronous database connections and cache."""
         self.db.close()
         try:
             loop = asyncio.get_running_loop()
@@ -226,3 +226,4 @@ class LLMWrapper:
             asyncio.run(self.db_port.close())
         else:
             loop.run_until_complete(self.db_port.close())
+        self.cache.close()

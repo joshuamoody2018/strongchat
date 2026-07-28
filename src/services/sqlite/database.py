@@ -9,16 +9,27 @@ from typing import Optional, List, Tuple, Dict, Any
 class ChatDatabase:
     """SQLite database wrapper for chat sessions, messages, and intents."""
     
-    def __init__(self, db_path: str = 'data/chat_database.db'):
+    def __init__(self, db_path: str = 'data/chat_database.db', check_same_thread: bool = True):
         """Initialize the database connection.
         
         Args:
             db_path: Path to the SQLite database file
+            check_same_thread: Passed through to sqlite3.connect
         """
         self.db_path = db_path
-        self.conn = sqlite3.connect(db_path)
+        self.conn = sqlite3.connect(db_path, check_same_thread=check_same_thread)
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.cursor = self.conn.cursor()
+        self._closed = False
+    
+    def _execute_write(self, sql: str, parameters: Tuple = ()) -> None:
+        """Execute a write statement inside a transaction that auto-commits or rolls back.
+        
+        Uses the connection context manager so a failed write does not leave the
+        connection in an aborted transaction state.
+        """
+        with self.conn:
+            self.cursor.execute(sql, parameters)
     
     def create_session(self, name: str, created_by: str = "user") -> str:
         """Create a new chat session.
@@ -31,11 +42,10 @@ class ChatDatabase:
             UUID of the created session
         """
         session_uuid = str(uuid.uuid4())
-        self.cursor.execute(
+        self._execute_write(
             "INSERT INTO sessions (uuid, name, created_by) VALUES (?, ?, ?)",
             (session_uuid, name, created_by)
         )
-        self.conn.commit()
         return session_uuid
     
     def create_message(self, session_uuid: str, input_text: str, output_text: str) -> str:
@@ -51,11 +61,10 @@ class ChatDatabase:
             UUID of the created message
         """
         message_uuid = str(uuid.uuid4())
-        self.cursor.execute(
+        self._execute_write(
             "INSERT INTO messages (uuid, session_uuid, unique_prompt, raw_response) VALUES (?, ?, ?, ?)",
             (message_uuid, session_uuid, input_text, output_text)
         )
-        self.conn.commit()
         return message_uuid
     
     def get_message_type(self, slug: str) -> Optional[Dict[str, Any]]:
@@ -111,14 +120,13 @@ class ChatDatabase:
         message_uuid = str(uuid.uuid4())
         response_at = datetime.now() if raw_response or error_text else None
         
-        self.cursor.execute("""
+        self._execute_write("""
             INSERT INTO messages (uuid, session_uuid, message_type_slug, unique_prompt, 
                                 raw_response, created_at, response_at, num_tries, error_text)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (message_uuid, session_uuid, message_type_slug, unique_prompt, 
               raw_response, datetime.now(), response_at, num_tries, error_text))
         
-        self.conn.commit()
         return message_uuid
     
     def get_message_by_uuid(self, message_uuid: str) -> Optional[Dict[str, Any]]:
@@ -282,7 +290,12 @@ class ChatDatabase:
     
     def close(self):
         """Close the database connection."""
-        self.conn.close()
+        if self._closed:
+            return
+        try:
+            self.conn.close()
+        finally:
+            self._closed = True
     
     def __enter__(self):
         """Context manager entry."""

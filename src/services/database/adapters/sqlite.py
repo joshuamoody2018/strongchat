@@ -23,10 +23,7 @@ class _ThreadSafeChatDatabase(ChatDatabase):
     """
 
     def __init__(self, db_path: str) -> None:
-        self.db_path = db_path
-        self.conn = sqlite3.connect(db_path, check_same_thread=False)
-        self.conn.execute("PRAGMA foreign_keys = ON")
-        self.cursor = self.conn.cursor()
+        super().__init__(db_path, check_same_thread=False)
 
 
 class AsyncSQLiteDatabase:

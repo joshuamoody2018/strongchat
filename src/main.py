@@ -165,6 +165,7 @@ def main():
                     )
     
     llm_wrapper.close()
+    cache.close()
     db.close()
     print("Goodbye!")
 

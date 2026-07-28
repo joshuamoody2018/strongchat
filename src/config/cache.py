@@ -70,3 +70,9 @@ class GlobalReferenceCache:
         """Invalidate specific message type cache"""
         if slug in self.ref_message_types:
             del self.ref_message_types[slug]
+    
+    def close(self):
+        """Close the underlying database connection if it is open."""
+        if self.db is not None:
+            self.db.close()
+            self.db = None

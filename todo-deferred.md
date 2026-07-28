@@ -16,6 +16,15 @@
 - [ ] Add async queue for processing pipeline steps
 - [ ] Implement async web server integration (Quart)
 
+## Database Client Modernization
+- [ ] Move beyond hand-rolled parameterized SQL in `ChatDatabase` to a proper database client/strategy
+- [ ] Define session lifecycle and connection management (open/close/pool/reconnect semantics)
+- [ ] Support true async database operations without thread-pool workarounds
+- [ ] Add connection pooling or equivalent concurrency control for SQLite
+- [ ] Establish typed models and deserialisation for query results and JSON columns
+- [ ] Introduce a versioned migration discipline for schema changes
+- [ ] Keep any future database implementation contained behind the existing `DatabasePort` abstraction
+
 ## Performance Optimizations
 - [ ] Add response caching with TTL
 - [ ] Implement connection pooling for API calls
