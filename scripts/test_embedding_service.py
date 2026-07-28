@@ -13,6 +13,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from unittest.mock import AsyncMock, patch
 
 # Add src directory to path before any service imports.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -157,17 +158,29 @@ class TestEmbeddingService(unittest.TestCase):
             self.assertEqual(result[i], deterministic_vector(text))
 
     def test_retry_path_recovers_from_two_connection_errors(self):
-        """Two injected APIConnectionErrors followed by success should succeed."""
+        """Two injected APIConnectionErrors followed by success should succeed and record num_tries."""
         texts = ["first", "second"]
         embed_fn, state = self._make_fake_embed_fn(fail_first_n=2)
         service = EmbeddingService(self.db_path, embed_fn=embed_fn)
 
-        result = asyncio.run(service.embed_texts(texts))
+        with patch.object(asyncio, "sleep", new_callable=AsyncMock):
+            result = asyncio.run(
+                service.embed_texts(texts, session_uuid=self.session_uuid)
+            )
 
         self.assertEqual(state["calls"], 3)
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0], deterministic_vector("first"))
         self.assertEqual(result[1], deterministic_vector("second"))
+
+        messages = service.db.get_messages_by_session_and_type(
+            session_uuid=self.session_uuid,
+            message_type_slug="embedding_generation",
+        )
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0]["num_tries"], 3)
+        self.assertIsNotNone(messages[0]["raw_response"])
+        self.assertIsNone(messages[0]["error_text"])
 
     def test_retry_exhaustion_raises_max_retries_exceeded(self):
         """If all retries fail, MaxRetriesExceededError is raised."""
@@ -175,10 +188,35 @@ class TestEmbeddingService(unittest.TestCase):
         embed_fn, state = self._make_fake_embed_fn(fail_first_n=10)
         service = EmbeddingService(self.db_path, embed_fn=embed_fn)
 
-        with self.assertRaises(MaxRetriesExceededError):
-            asyncio.run(service.embed_texts(texts))
+        with patch.object(asyncio, "sleep", new_callable=AsyncMock):
+            with self.assertRaises(MaxRetriesExceededError):
+                asyncio.run(service.embed_texts(texts))
 
         self.assertEqual(state["calls"], 3)
+
+    def test_persistent_failure_records_num_tries_and_error_text(self):
+        """Persistent failure writes an error_text row with num_tries == max_retries."""
+        texts = ["only"]
+        embed_fn, state = self._make_fake_embed_fn(fail_first_n=10)
+        service = EmbeddingService(self.db_path, embed_fn=embed_fn)
+
+        with patch.object(asyncio, "sleep", new_callable=AsyncMock):
+            with self.assertRaises(MaxRetriesExceededError):
+                asyncio.run(
+                    service.embed_texts(texts, session_uuid=self.session_uuid)
+                )
+
+        self.assertEqual(state["calls"], 3)
+
+        messages = service.db.get_messages_by_session_and_type(
+            session_uuid=self.session_uuid,
+            message_type_slug="embedding_generation",
+        )
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0]["num_tries"], 3)
+        self.assertIsNone(messages[0]["raw_response"])
+        self.assertIsNotNone(messages[0]["error_text"])
+        self.assertIn("failed after", messages[0]["error_text"])
 
     def test_recording_stores_summary_not_vectors(self):
         """A recorded message must contain dimension/count, never embeddings."""

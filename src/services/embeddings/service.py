@@ -8,7 +8,7 @@ import asyncio
 import inspect
 import json
 import logging
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple
 
 import aiohttp
 
@@ -83,12 +83,13 @@ class EmbeddingService(BaseService):
         """
         chunks = [texts[i : i + chunk_size] for i in range(0, len(texts), chunk_size)]
         results: List[List[float]] = []
-        num_tries = 1
+        num_tries = 0
 
         try:
             for chunk in chunks:
-                chunk_embeddings = await self._embed_chunk(chunk)
+                chunk_embeddings, chunk_tries = await self._embed_chunk(chunk)
                 results.extend(chunk_embeddings)
+                num_tries += chunk_tries
 
             if record and session_uuid is not None:
                 raw_response = json.dumps(
@@ -110,6 +111,7 @@ class EmbeddingService(BaseService):
             return results
 
         except Exception as exc:
+            num_tries += getattr(exc, "_embedding_attempts", 1)
             if record and session_uuid is not None:
                 self.record_message(
                     message_type_slug="embedding_generation",
@@ -124,33 +126,38 @@ class EmbeddingService(BaseService):
         """Close the underlying database connection."""
         self.llm.close()
 
-    async def _embed_chunk(self, texts: List[str]) -> List[List[float]]:
-        """Embed a single chunk, retrying transient failures."""
-        for attempt in range(self._max_retries):
+    async def _embed_chunk(self, texts: List[str]) -> Tuple[List[List[float]], int]:
+        """Embed a single chunk, retrying transient failures.
+
+        Returns:
+            A tuple of (embeddings, attempts_made).
+        """
+        attempts = 0
+        last_error: Optional[Exception] = None
+
+        while attempts < self._max_retries:
+            attempts += 1
             try:
-                return await self._call_embedder_once(texts)
+                return await self._call_embedder_once(texts), attempts
             except (APITimeoutError, APIConnectionError) as exc:
-                if attempt < self._max_retries - 1:
-                    backoff_time = min(1.0 * (2 ** attempt), MAX_BACKOFF)
+                last_error = exc
+                if attempts < self._max_retries:
+                    backoff_time = min(1.0 * (2 ** (attempts - 1)), MAX_BACKOFF)
                     logger.warning(
                         "Embedding API call failed, retrying in %.1fs: %s",
                         backoff_time,
                         exc,
                     )
                     await asyncio.sleep(backoff_time)
-                else:
-                    logger.error(
-                        "Embedding API call failed after %d attempts: %s",
-                        self._max_retries,
-                        exc,
-                    )
-                    raise MaxRetriesExceededError(
-                        f"API call failed after {self._max_retries} attempts: {exc}"
-                    ) from exc
+            except Exception as exc:
+                setattr(exc, "_embedding_attempts", attempts)
+                raise
 
-        raise MaxRetriesExceededError(
-            "Max retries exceeded for embedding generation"
+        err = MaxRetriesExceededError(
+            f"API call failed after {self._max_retries} attempts: {last_error}"
         )
+        setattr(err, "_embedding_attempts", attempts)
+        raise err from last_error
 
     async def _call_embedder_once(self, texts: List[str]) -> List[List[float]]:
         """Call the injected function or the live OpenRouter endpoint once."""
