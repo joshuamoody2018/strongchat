@@ -68,7 +68,7 @@ class ChatDatabase:
         """
         self.cursor.execute("""
             SELECT slug, step_name, creator_type, request_schema, model_slug, 
-                   temperature, additional_model_settings, max_retries, is_active, description
+                   temperature, additional_model_settings, max_retries, is_active, description, prompt_template
             FROM ref_message_types 
             WHERE slug = ? AND is_active = 1
         """, (slug,))
@@ -87,7 +87,8 @@ class ChatDatabase:
             'additional_model_settings': json.loads(result[6]) if result[6] else {},
             'max_retries': result[7],
             'is_active': bool(result[8]),
-            'description': result[9]
+            'description': result[9],
+            'prompt_template': result[10] if result[10] else None
         }
     
     def create_message_with_type(self, session_uuid: str, message_type_slug: str, 
@@ -133,7 +134,7 @@ class ChatDatabase:
                    m.raw_response, m.created_at, m.response_at, m.num_tries, m.error_text,
                    mt.step_name, mt.creator_type, mt.model_slug
             FROM messages m
-            LEFT JOIN message_types mt ON m.message_type_slug = mt.slug
+            LEFT JOIN ref_message_types mt ON m.message_type_slug = mt.slug
             WHERE m.uuid = ?
         """, (message_uuid,))
         
@@ -172,7 +173,7 @@ class ChatDatabase:
                        m.raw_response, m.created_at, m.response_at, m.num_tries, m.error_text,
                        mt.step_name, mt.creator_type, mt.model_slug
                 FROM messages m
-                LEFT JOIN message_types mt ON m.message_type_slug = mt.slug
+                LEFT JOIN ref_message_types mt ON m.message_type_slug = mt.slug
                 WHERE m.session_uuid = ? AND m.message_type_slug = ?
                 ORDER BY m.created_at
             """, (session_uuid, message_type_slug))
@@ -182,7 +183,7 @@ class ChatDatabase:
                        m.raw_response, m.created_at, m.response_at, m.num_tries, m.error_text,
                        mt.step_name, mt.creator_type, mt.model_slug
                 FROM messages m
-                LEFT JOIN message_types mt ON m.message_type_slug = mt.slug
+                LEFT JOIN ref_message_types mt ON m.message_type_slug = mt.slug
                 WHERE m.session_uuid = ?
                 ORDER BY m.created_at
             """, (session_uuid,))
@@ -240,24 +241,6 @@ class ChatDatabase:
         
         return message_types
     
-    def create_intent(self, message_uuid: str, intent: str) -> str:
-        """Create an intent record for a message.
-        
-        Args:
-            message_uuid: UUID of the message
-            intent: Intent classification
-            
-        Returns:
-            UUID of the created intent
-        """
-        intent_uuid = str(uuid.uuid4())
-        self.cursor.execute(
-            "INSERT INTO intents (uuid, message_uuid, intent) VALUES (?, ?, ?)",
-            (intent_uuid, message_uuid, intent)
-        )
-        self.conn.commit()
-        return intent_uuid
-    
     def get_session_name(self, session_uuid: str) -> Optional[str]:
         """Get session name by UUID.
         
@@ -294,18 +277,6 @@ class ChatDatabase:
             "SELECT uuid, unique_prompt, raw_response, created_at FROM messages WHERE session_uuid = ? ORDER BY created_at",
             (session_uuid,)
         )
-        return self.cursor.fetchall()
-    
-    def get_intents_for_message(self, message_uuid: str) -> List[Tuple[str, str]]:
-        """Get all intents for a message.
-        
-        Args:
-            message_uuid: UUID of the message
-            
-        Returns:
-            List of (uuid, intent) tuples
-        """
-        self.cursor.execute("SELECT uuid, intent FROM intents WHERE message_uuid = ?", (message_uuid,))
         return self.cursor.fetchall()
     
     def close(self):
