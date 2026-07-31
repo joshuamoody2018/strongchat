@@ -86,7 +86,7 @@ opencode mcp list
 - **Use cases**: Complex reasoning, architecture, planning, critical decisions
 - **Models**: kimi-k2.7-code (variants), deepseek-v4-pro, deepseek-v4-flash
 - **Agents**: architect, developer, oracle, momus, visual-engineering category
-- **Fallback**: opencode-go → openrouter (same model)
+- **Fallback**: opencode-go → openrouter (same model, e.g., kimi-k2.7-code → kimi-k2.7-code)
 
 ### Fast Models (Speed & Cost-Focused)
 - **Use cases**: Search, exploration, documentation, simple tasks, background work
