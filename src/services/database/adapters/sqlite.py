@@ -8,8 +8,8 @@ import asyncio
 import sqlite3
 from typing import Any, Dict, List, Optional, Tuple
 
-from services.database.port import DatabasePort
-from services.sqlite.database import ChatDatabase
+from src.services.database.port import DatabasePort
+from src.services.sqlite.database import ChatDatabase
 
 
 class _ThreadSafeChatDatabase(ChatDatabase):

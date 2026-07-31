@@ -5,8 +5,8 @@ import json
 import logging
 from typing import Dict, Any, List
 
-from services.base import BaseService
-from services.llm.exceptions import LLMError
+from src.services.base import BaseService
+from src.services.llm.exceptions import LLMError
 
 logger = logging.getLogger(__name__)
 

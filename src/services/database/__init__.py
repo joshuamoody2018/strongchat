@@ -1,4 +1,4 @@
 """Database port and adapter package for StrongChat."""
-from services.database.port import DatabasePort
+from src.services.database.port import DatabasePort
 
 __all__ = ["DatabasePort"]

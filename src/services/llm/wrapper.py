@@ -9,8 +9,8 @@ from datetime import datetime
 
 from .aimessage import AIMessage
 from ..sqlite.database import ChatDatabase
-from services.database.adapters.sqlite import AsyncSQLiteDatabase
-from config.cache import GlobalReferenceCache
+from src.services.database.adapters.sqlite import AsyncSQLiteDatabase
+from src.config.cache import GlobalReferenceCache
 from .exceptions import (
     APITimeoutError, APIConnectionError, APIResponseError,
     MaxRetriesExceededError, ConfigurationError, ModelNotFoundError

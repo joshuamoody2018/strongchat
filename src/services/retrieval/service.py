@@ -4,9 +4,9 @@ import asyncio
 import logging
 from typing import Dict, Any, List
 
-from services.base import BaseService
-from services.embeddings import EmbeddingService
-from services.vectordb import VerseStore
+from src.services.base import BaseService
+from src.services.embeddings import EmbeddingService
+from src.services.vectordb import VerseStore
 
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,5 @@
 """Embedding service package."""
 
-from services.embeddings.service import EmbeddingService
+from src.services.embeddings.service import EmbeddingService
 
 __all__ = ["EmbeddingService"]

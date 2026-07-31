@@ -12,8 +12,8 @@ from typing import Callable, List, Optional, Tuple
 
 import aiohttp
 
-from services.base import BaseService
-from services.llm.exceptions import (
+from src.services.base import BaseService
+from src.services.llm.exceptions import (
     APIConnectionError,
     APIResponseError,
     APITimeoutError,
