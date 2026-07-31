@@ -87,7 +87,7 @@
       "model": "opencode-go/kimi-k2.7-code",
       "fallback_models": [
         { "model": "opencode-go/kimi-k2.7-code" },
-        { "model": "openrouter/kimi/kimi-large-0.5" }
+        { "model": "openrouter/kimi/kimi-k2.7-code" }
       ]
     },
 
