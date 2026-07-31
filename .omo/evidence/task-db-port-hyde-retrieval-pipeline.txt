@@ -1,0 +1,16 @@
+=== Evidence: task-db-port-hyde-retrieval-pipeline ===
+Date: 2026-07-28T22:30:47+02:00
+
+=== py_compile ===
+py_compile exit code: 0
+
+=== env -u OPENROUTER_API_KEY .venv/bin/python scripts/test_database_port.py ===
+Testing DatabasePort / AsyncSQLiteDatabase adapter...
+============================================================
+
+============================================================
+Tests run: 5
+Failures: 0
+Errors: 0
+============================================================
+test exit code: 0

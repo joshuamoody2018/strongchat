@@ -1,0 +1,82 @@
+# Task 7 evidence — BaseService shared foundation
+
+## Syntax check
+
+```bash
+.venv/bin/python -m py_compile src/services/base.py
+```
+
+Result: exit 0 (no output).
+
+## Acceptance verification
+
+```bash
+set -a; . ./.env; set +a
+.venv/bin/python -c "import sys; sys.path.insert(0,'src'); from services.base import BaseService; s=BaseService(); print(type(s.llm).__name__, type(s.db).__name__)"
+```
+
+Output:
+
+```
+LLMWrapper ChatDatabase
+```
+
+Exit: 0
+
+## Functional smoke: record_message + parse_message
+
+```bash
+set -a; . ./.env; set +a
+.venv/bin/python -c "
+import sys, json
+sys.path.insert(0, 'src')
+from services.base import BaseService
+from services.llm.aimessage import AIMessage
+s = BaseService()
+session = s.db.create_session('test-base')
+msg_id = s.record_message('human_input', 'hello', session, raw_response=json.dumps({'greeting': 'hi'}), num_tries=1)
+print('recorded', msg_id)
+aim = AIMessage(session_uuid=session, message_type_slug='human_input', unique_prompt='hello', raw_response=json.dumps({'greeting': 'hi'}))
+parsed = s.parse_message(aim, 'human_input')
+print('parsed', parsed)
+"
+```
+
+Output:
+
+```
+recorded ba334977-4aa1-45b2-a993-6c4fdfd68663
+parsed {'greeting': 'hi'}
+```
+
+Exit: 0
+
+## Failure QA: invalid db_path
+
+```bash
+.venv/bin/python -c "import sys, sqlite3; sys.path.insert(0,'src'); from services.base import BaseService; BaseService(db_path='/nonexistent/x.db')" 2>&1
+echo "exit=$?"
+```
+
+Output:
+
+```
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File ".../src/services/base.py", line 23, in __init__
+    self.llm = LLMWrapper(db_path)
+               ^^^^^^^^^^^^^^^^^^^
+  File ".../src/services/llm/wrapper.py", line 29, in __init__
+    self.db = ChatDatabase(db_path)
+              ^^^^^^^^^^^^^^^^^^^^^
+  File ".../src/services/sqlite/database.py", line 19, in __init__
+    self.conn = sqlite3.connect(db_path)
+                ^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: unable to open database file
+exit=1
+```
+
+The failure surfaces as `sqlite3.OperationalError` with no silent fallback.
+
+---
+Evidence captured at 2026-07-28.

@@ -1,0 +1,15 @@
+{
+  "schema_version": 2,
+  "active_work_id": null,
+  "works": {
+    "repo-cleanup": {
+      "work_id": "repo-cleanup",
+      "active_plan": ".omo/plans/repo-cleanup.md",
+      "plan_name": "repo-cleanup",
+      "session_ids": ["codex:ses_055454682ffeaeC8GlMG0ZS0nY"],
+      "status": "completed",
+      "worktree_path": null,
+      "ended_at": "2026-07-29T00:17:00Z"
+    }
+  }
+}

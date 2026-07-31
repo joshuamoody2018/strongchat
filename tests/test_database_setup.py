@@ -14,9 +14,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 from services.sqlite.database import ChatDatabase
 from services.llm.aimessage import AIMessage
 
-# Import the database creation script
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 import create_new_database
+import populate_message_types
 
 
 class TestDatabaseSetup(unittest.TestCase):
@@ -25,10 +25,10 @@ class TestDatabaseSetup(unittest.TestCase):
     def setUp(self):
         """Set up test database"""
         self.test_db = tempfile.mktemp(suffix='.db')
-        
-        # Create the database schema
+
         create_new_database.create_new_database(self.test_db)
-        
+        populate_message_types.populate_message_types(self.test_db)
+
         self.db = ChatDatabase(self.test_db)
     
     def tearDown(self):
@@ -59,18 +59,26 @@ class TestDatabaseSetup(unittest.TestCase):
     
     def test_message_operations(self):
         """Test message operations with new schema"""
-        # Create session first
         session_uuid = self.db.create_session("Test Session", "test")
-        
-        # Create message with type
+
+        self.db.cursor.execute("""
+            INSERT INTO ref_message_types
+            (slug, step_name, creator_type, request_schema, model_slug,
+             temperature, additional_model_settings, max_retries, is_active, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            'test_type', 'Test Type', 'programmatic',
+            '{"type":"object"}', 'n/a', 0.0, '{}', 3, 1, 'Test message type'
+        ))
+        self.db.conn.commit()
+
         message_uuid = self.db.create_message_with_type(
             session_uuid=session_uuid,
             message_type_slug="test_type",
             unique_prompt="Test prompt"
         )
         self.assertIsNotNone(message_uuid)
-        
-        # Get message by UUID
+
         message = self.db.get_message_by_uuid(message_uuid)
         self.assertIsNotNone(message)
         self.assertEqual(message['session_uuid'], session_uuid)
@@ -108,13 +116,11 @@ class TestDatabaseSetup(unittest.TestCase):
         # Create session first
         session_uuid = self.db.create_session("Test Session", "test")
         
-        # Create message with non-existent message type - should succeed since nullable
         message_uuid = self.db.create_message_with_type(
             session_uuid=session_uuid,
-            message_type_slug="nonexistent_type",
+            message_type_slug=None,
             unique_prompt="Test prompt"
         )
-        # Should succeed since message_type_slug is nullable
         self.assertIsNotNone(message_uuid)
 
 

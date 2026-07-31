@@ -1,0 +1,37 @@
+Task 18 — Add live end-to-end pipeline integration test
+Generated: 2026-07-28
+
+Verification command (live):
+    set -a; . ./.env; set +a; .venv/bin/python tests/system/test_pipeline_e2e.py
+
+Output:
+    === Live Pipeline End-to-End Integration Test ===
+
+    Session: c61c27c2-5a80-41e5-916a-a32400bb6014
+    Intents: 4
+    HyDE docs: 4
+      Top KJV hit: Jeremiah 12:1 | Righteous art thou, O Lord, when I plead with thee: yet let me talk with thee of thy judgments: Wherefore doth the way of the wicked prosper? wherefore are all they happy that deal very treacherously?...
+      Top WEB hit: Jeremiah 12:1 | You are righteous, LORD, when I contend with you; yet I would like to plead a case with you. Why does the way of the wicked prosper? Why are they all at ease who deal very treacherously?...
+
+    === Result ===
+    PASS
+
+Exit code: 0
+
+Negative QA command:
+    .venv/bin/python tests/system/test_pipeline_e2e.py --orphan-negative
+
+Output:
+    Orphan negative check: PASS (bogus_slug flagged)
+
+Exit code: 0
+
+Notes:
+- The first regex attempt (r'^\w+ \d+:\d+$') rejected multi-word book references
+  such as '1 Peter 2:20'; the regex was relaxed to r'^(?:\w+\s)+\d+:\d+$' to
+  accept references like '1 Peter 2:20' and '2 Samuel 12:1'.
+- The live run exercises exactly one pipeline query, then verifies the DB audit
+  trail: 1 intent_generation, N hyde_generation (N == len(intents)), and
+  1 embedding_generation row, with no orphan message_type_slug values.
+- The negative fixture proves the orphan check catches a message whose slug is
+  absent from ref_message_types.

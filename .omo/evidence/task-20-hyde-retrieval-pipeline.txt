@@ -1,0 +1,62 @@
+AGENTS.md
+LLM_FRAMEWORK.md
+architecture/README.md
+architecture/implementation-status.md
+architecture/pipeline-hyde-retrieval.md
+todo.md
+---
+ M .gitignore
+ D .omo/boulder.json
+ M .omo/notepads/hyde-retrieval-pipeline/learnings.md
+ M .omo/plans/hyde-retrieval-pipeline.md
+ M .omo/run-continuation/ses_0592d876cffelbhH3TTwhp06ML.json
+ M .omo/run-continuation/ses_05986d22effeLFhGzi8V0dOUvU.json
+M  AGENTS.md
+M  LLM_FRAMEWORK.md
+ M README.md
+M  architecture/README.md
+M  architecture/implementation-status.md
+A  architecture/pipeline-hyde-retrieval.md
+ M data/chat_database.db
+ M src/config/__pycache__/__init__.cpython-312.pyc
+ M src/config/__pycache__/cache.cpython-312.pyc
+ M src/config/__pycache__/prompts.cpython-312.pyc
+ M src/config/__pycache__/schemas.cpython-312.pyc
+ M src/services/sqlite/__pycache__/database.cpython-312.pyc
+M  todo.md
+?? .omo/evidence/task-10-hyde-retrieval-pipeline.txt
+?? .omo/evidence/task-11-hyde-retrieval-pipeline.txt
+?? .omo/evidence/task-12-hyde-retrieval-pipeline.txt
+?? .omo/evidence/task-13-hyde-retrieval-pipeline.txt
+?? .omo/evidence/task-14-hyde-retrieval-pipeline.txt
+?? .omo/evidence/task-15-hyde-retrieval-pipeline.txt
+?? .omo/evidence/task-16-hyde-retrieval-pipeline.txt
+?? .omo/evidence/task-17-hyde-retrieval-pipeline.txt
+?? .omo/evidence/task-18-hyde-retrieval-pipeline.txt
+?? .omo/evidence/task-19-hyde-retrieval-pipeline.txt
+?? .omo/evidence/task-20-hyde-retrieval-pipeline.txt
+?? .omo/evidence/task-6-hyde-retrieval-pipeline.txt
+?? .omo/evidence/task-7-hyde-retrieval-pipeline.txt
+?? .omo/evidence/task-8-hyde-retrieval-pipeline.txt
+?? .omo/evidence/task-9-hyde-retrieval-pipeline.txt
+?? .omo/run-continuation/ses_055d713f5ffep1GGA8yviWWeWw.json
+?? .omo/run-continuation/ses_055e1d17affeqZNJzjgcEeF0uc.json
+?? .omo/run-continuation/ses_055eab15cffewgxdfGR8XNpWTZ.json
+?? .omo/run-continuation/ses_055eaf388ffe9G7EBCP3ut4gQ8.json
+?? .omo/run-continuation/ses_055f1f090ffe9HLWZHk2FSfWNv.json
+?? .omo/run-continuation/ses_056e6f508ffekkiAFYOUe0HLYo.json
+?? .omo/run-continuation/ses_056eda9cbffemZx0rI8SFpuOUg.json
+?? .omo/run-continuation/ses_056ee53d4ffeiclJQGMpoLwGSQ.json
+?? .omo/run-continuation/ses_057005822fferemttFmsti2dXS.json
+?? .omo/run-continuation/ses_05700e636ffeOMjxBKtBJwr576.json
+?? .omo/run-continuation/ses_0570157e6ffeob5phSEtrsTXCV.json
+?? .omo/run-continuation/ses_0570c39c1ffe64VoNpziveAFOH.json
+?? .omo/run-continuation/ses_0570c59cdffeFFJOG1RJs3Qeo1.json
+?? .omo/run-continuation/ses_057187b84ffeCupIvWGCPqyBhI.json
+?? .omo/run-continuation/ses_05721cceeffeTmfogT0Q68A2Ys.json
+?? .omo/run-continuation/ses_0572a173effeaACElLR8CyqVTK.json
+?? .omo/run-continuation/ses_05739e57dffewCHGgEPmW9eVTi.json
+?? .omo/run-continuation/ses_059232601ffeheGGCU6xr8d2Tp.json
+?? .opencode/
+?? data/chat_database.db.pre-pipeline.bak
+?? opencode.json

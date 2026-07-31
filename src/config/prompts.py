@@ -1,18 +1,5 @@
 """Prompt templates for LLM interactions"""
 
-INTENT_DISAMBIGUATION_PROMPT = """
-Analyze the following query to identify possible interpretations and ambiguities:
-
-Query: "{query}"
-
-Please provide a structured analysis identifying different ways this query could be interpreted, including:
-- What parts of the query might be ambiguous
-- Multiple possible interpretations
-- Keywords that would be relevant for each interpretation
-
-Format your response as valid JSON matching the expected schema.
-"""
-
 INTENT_CLASSIFICATION_PROMPT = """Classify the following query into structured intents. Return ONLY complete JSON.
 
 Query: {query}
@@ -41,19 +28,21 @@ Response format:
   "recommended_search_approach": "approach description"
 }}"""
 
-INTENT_GENERATION_PROMPT = """Analyze the following user query in plain, non-religious language. Do not use biblical or theological vocabulary in the analysis itself.
+INTENT_GENERATION_PROMPT = """Analyze the following user query.
 
 Query: {query}
 
 Return ONLY complete, valid JSON matching the schema.
 
 Rules:
-- The "query_analysis" section must describe the user's request in plain language, with no biblical or theological terms.
+- The "query_analysis" section must describe the user's request in plain language.
+- "core_questions" must contain at least one question the user is asking.
+- "context_clues" must always be present. Include any explicit context (e.g., names, places, time references) from the query; if there are none, use an empty array [].
 - "keywords_explicit" must contain only words that appear verbatim in the query.
 - "keywords_inferred" must contain related words or concepts that do NOT appear verbatim in the query.
 - Each intent must have 1 to 3 short "themes" labels.
 - Provide 1 to 5 distinct intents that represent different plausible readings of the query.
-- Exactly one intent must have "is_primary": true.
+- Every intent must include the "is_primary" field (true or false). Exactly one intent across the entire list must have "is_primary": true.
 
 Response format:
 {{
@@ -71,6 +60,15 @@ Response format:
       "themes": ["theme one"],
       "confidence": 0.9,
       "is_primary": true
+    }},
+    {{
+      "intent_id": "secondary",
+      "interpretation": "another plausible reading of the query",
+      "keywords_explicit": ["other", "query", "words"],
+      "keywords_inferred": ["inferred", "terms", "not", "verbatim"],
+      "themes": ["theme two"],
+      "confidence": 0.6,
+      "is_primary": false
     }}
   ],
   "recommended_search_approach": "brief description"

@@ -22,19 +22,6 @@ class BaseResponseModel:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.to_dict()})"
 
-class IntentDisambiguationResponse(BaseResponseModel):
-    """Parsed intent disambiguation response"""
-    
-    def __init__(
-        self,
-        query_analysis: Dict[str, Any],
-        interpretive_framings: list,
-        recommended_framing: str
-    ):
-        self.query_analysis = query_analysis
-        self.interpretive_framings = interpretive_framings
-        self.recommended_framing = recommended_framing
-
 class ResponseParser:
     """Automated parser for LLM responses with schema validation"""
     

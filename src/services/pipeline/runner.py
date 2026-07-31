@@ -59,6 +59,29 @@ class PipelineRunner(BaseService):
         self.intent_service = IntentService(db_path)
         self.hyde_service = HydeService(db_path)
 
+    async def run_intent_only(
+        self,
+        query: str,
+        session_uuid: str,
+    ) -> Dict[str, Any]:
+        """Run only the intent generation part of the pipeline.
+        
+        Args:
+            query: The raw user query.
+            session_uuid: UUID of the parent session.
+            
+        Returns:
+            Dictionary with intent analysis results.
+        """
+        intent_response = await self.intent_service.generate_intents(
+            query, session_uuid
+        )
+        return {
+            'query_analysis': intent_response['query_analysis'],
+            'intents': intent_response['intents'],
+            'recommended_search_approach': intent_response['recommended_search_approach'],
+        }
+
     async def run(
         self,
         query: str,

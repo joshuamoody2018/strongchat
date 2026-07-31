@@ -1,0 +1,143 @@
+=== Task 2 Evidence: Exclude new data dirs and scaffold data dirs ===
+Date: 2026-07-28T03:06:53Z
+Working dir: /home/joshua/projects/strongchat
+
+=== STEP 1: Pre-state of .git/info/exclude ===
+# git ls-files --others --exclude-from=.git/info/exclude
+# Lines that start with '#' are comments.
+# For a project mostly in C, the following would be a good set of
+# exclude patterns (uncomment them if you want to use them):
+# *.[oa]
+# *~
+---END pre-state
+
+=== STEP 2: Pre-existence check for the 3 target entries ===
+MISSING: .venv/
+MISSING: data/bible/
+MISSING: data/chroma/
+
+=== STEP 3: Append 3 entries to .git/info/exclude ===
+APPENDED: .venv/
+APPENDED: data/bible/
+APPENDED: data/chroma/
+
+=== STEP 4: Post-state of .git/info/exclude ===
+# git ls-files --others --exclude-from=.git/info/exclude
+# Lines that start with '#' are comments.
+# For a project mostly in C, the following would be a good set of
+# exclude patterns (uncomment them if you want to use them):
+# *.[oa]
+# *~
+.venv/
+data/bible/
+data/chroma/
+---END post-state
+
+=== STEP 5: Confirm each entry appears exactly once ===
+.venv/ -> 1 occurrence(s)
+data/bible/ -> 1 occurrence(s)
+data/chroma/ -> 1 occurrence(s)
+
+=== STEP 6: Verify data dirs exist ===
+total 72
+drwxrwxr-x  4 joshua joshua  4096 Jul 28 05:06 .
+drwxrwxr-x 12 joshua joshua  4096 Jul 28 05:06 ..
+drwxrwxr-x  2 joshua joshua  4096 Jul 28 05:06 bible
+-rw-r--r--  1 joshua joshua 53248 Jul 26 05:13 chat_database.db
+drwxrwxr-x  2 joshua joshua  4096 Jul 28 05:06 chroma
+
+=== STEP 7: git check-ignore -v (should show .git/info/exclude as source) ===
+.git/info/exclude:7:.venv/	.venv
+.git/info/exclude:8:data/bible/	data/bible
+.git/info/exclude:9:data/chroma/	data/chroma
+---exit: 0
+
+=== STEP 8: git status (proves dirs and probe absent from porcelain after we run probes) ===
+ M .gitignore
+ M README.md
+?? .omo/
+?? .opencode/
+?? opencode.json
+---exit: 0
+
+=== STEP 9: Failure QA — create probe files ===
+/home/joshua/projects/strongchat/data/bible:
+total 8
+drwxrwxr-x 2 joshua joshua 4096 Jul 28 05:07 .
+drwxrwxr-x 4 joshua joshua 4096 Jul 28 05:06 ..
+-rw-rw-r-- 1 joshua joshua    0 Jul 28 05:07 .probe
+
+/home/joshua/projects/strongchat/data/chroma:
+total 8
+drwxrwxr-x 2 joshua joshua 4096 Jul 28 05:07 .
+drwxrwxr-x 4 joshua joshua 4096 Jul 28 05:06 ..
+-rw-rw-r-- 1 joshua joshua    0 Jul 28 05:07 .probe
+
+=== STEP 10: git status --porcelain | grep -E 'data/bible|data/chroma|\.venv' (must be empty) ===
+PASS: no data/bible, data/chroma, or .venv entries in porcelain
+grep exit: 1
+
+=== STEP 11: Remove probe files (cleanup) ===
+probes removed
+/home/joshua/projects/strongchat/data/bible:
+total 8
+drwxrwxr-x 2 joshua joshua 4096 Jul 28 05:07 .
+drwxrwxr-x 4 joshua joshua 4096 Jul 28 05:06 ..
+
+/home/joshua/projects/strongchat/data/chroma:
+total 8
+drwxrwxr-x 2 joshua joshua 4096 Jul 28 05:07 .
+drwxrwxr-x 4 joshua joshua 4096 Jul 28 05:06 ..
+
+=== STEP 12: Final git status (should match pre-task plus nothing data-related) ===
+ M .gitignore
+ M README.md
+?? .omo/
+?? .opencode/
+?? opencode.json
+---exit: 0
+
+=== STEP 13: Idempotency — re-run append (should report all 3 SKIP) ===
+SKIP (already present): .venv/
+SKIP (already present): data/bible/
+SKIP (already present): data/chroma/
+
+=== STEP 14: Confirm .gitignore was not touched ===
+ M .gitignore
+---exit: 0
+
+=== DONE ===
+
+=== FINAL VERIFICATION ===
+
+--- .git/info/exclude (final) ---
+     1	# git ls-files --others --exclude-from=.git/info/exclude
+     2	# Lines that start with '#' are comments.
+     3	# For a project mostly in C, the following would be a good set of
+     4	# exclude patterns (uncomment them if you want to use them):
+     5	# *.[oa]
+     6	# *~
+     7	.venv/
+     8	data/bible/
+     9	data/chroma/
+
+--- data/ tree ---
+/home/joshua/projects/strongchat/data/bible:
+total 8
+drwxrwxr-x 2 joshua joshua 4096 Jul 28 05:07 .
+drwxrwxr-x 4 joshua joshua 4096 Jul 28 05:06 ..
+
+/home/joshua/projects/strongchat/data/chroma:
+total 8
+drwxrwxr-x 2 joshua joshua 4096 Jul 28 05:07 .
+drwxrwxr-x 4 joshua joshua 4096 Jul 28 05:06 ..
+
+--- evidence file size ---
+135 /home/joshua/projects/strongchat/.omo/evidence/task-2-hyde-retrieval-pipeline.txt
+
+--- git status (should be unchanged from pre-task) ---
+ M .gitignore
+ M README.md
+?? .omo/
+?? .opencode/
+?? opencode.json

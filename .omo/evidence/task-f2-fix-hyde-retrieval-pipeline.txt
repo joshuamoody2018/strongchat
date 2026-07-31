@@ -1,0 +1,31 @@
+test_600_texts_chunks_into_three_calls_and_preserves_order (__main__.TestEmbeddingService.test_600_texts_chunks_into_three_calls_and_preserves_order)
+Given 600 texts and chunk_size=256, expect 3 calls in input order. ... ok
+test_no_record_skips_message_insert (__main__.TestEmbeddingService.test_no_record_skips_message_insert)
+record=False must not insert an embedding_generation row. ... ok
+test_persistent_failure_records_num_tries_and_error_text (__main__.TestEmbeddingService.test_persistent_failure_records_num_tries_and_error_text)
+Persistent failure writes an error_text row with num_tries == max_retries. ... Embedding API call failed, retrying in 1.0s: injected failure #1
+Embedding API call failed, retrying in 2.0s: injected failure #2
+ok
+test_recording_stores_summary_not_vectors (__main__.TestEmbeddingService.test_recording_stores_summary_not_vectors)
+A recorded message must contain dimension/count, never embeddings. ... ok
+test_retry_exhaustion_raises_max_retries_exceeded (__main__.TestEmbeddingService.test_retry_exhaustion_raises_max_retries_exceeded)
+If all retries fail, MaxRetriesExceededError is raised. ... Embedding API call failed, retrying in 1.0s: injected failure #1
+Embedding API call failed, retrying in 2.0s: injected failure #2
+ok
+test_retry_path_recovers_from_two_connection_errors (__main__.TestEmbeddingService.test_retry_path_recovers_from_two_connection_errors)
+Two injected APIConnectionErrors followed by success should succeed and record num_tries. ... Embedding API call failed, retrying in 1.0s: injected failure #1
+Embedding API call failed, retrying in 2.0s: injected failure #2
+ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 1.162s
+
+OK
+Testing EmbeddingService (offline)...
+==================================================
+
+==================================================
+Tests run: 6
+Failures: 0
+Errors: 0
+==================================================

@@ -18,8 +18,8 @@ All LLM and embedding calls are recorded as rows in the `messages` table, linked
 
 | Message type | Model slug | Purpose |
 |--------------|------------|---------|
-| `intent_generation` | `openai/gpt-4.1-mini` | Generate structured 1-5 intent interpretations of the user query. |
-| `hyde_generation` | `openai/gpt-4.1-mini` | Generate one 100-200 word hypothetical Bible passage from a single intent. |
+| `intent_generation` | `meta-llama/llama-3.3-70b-instruct` | Generate structured 1-5 intent interpretations of the user query. |
+| `hyde_generation` | `mistralai/mistral-small-24b-instruct-2501` | Generate one 100-200 word hypothetical Bible passage from a single intent. |
 | `embedding_generation` | `openai/text-embedding-3-small` | Embed a list of texts (HyDE docs or corpus verses). |
 | `corpus_ingest` | (none) | Summary audit row recorded after a full translation ingest. |
 
@@ -236,7 +236,7 @@ Approximate OpenRouter calls:
   - 1 `embedding_generation` call for all valid HyDE documents combined.
   - Example: a query producing 3 intents costs 1 intent + 3 HyDE + 1 embedding call.
 
-Embedding calls are cheap (~$5e-7 per 26-token sample observed). HyDE and intent calls use `openai/gpt-4.1-mini` and are the dominant per-query cost.
+Embedding calls are cheap (~$5e-7 per 26-token sample observed). HyDE and intent calls use the open-weight models above and are the dominant per-query cost.
 
 ## Next Steps
 

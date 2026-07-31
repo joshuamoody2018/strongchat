@@ -1,0 +1,75 @@
+Task 5 — Align database setup scripts with the live ref_message_types schema
+Date: 2026-07-28T03:34:33Z
+Interpreter: .venv/bin/python (only); fixture: tmp=$(mktemp -d) -> /tmp/tmp.wsybP0xJtN
+
+=== 1. Create schema against fixture ===
+$ .venv/bin/python scripts/create_new_database.py --db-path $tmp/fixture.db
+Dropping existing tables...
+New database schema created successfully!
+create_exit=0
+
+=== 2. Populate against fixture ===
+$ .venv/bin/python scripts/populate_message_types.py --db-path $tmp/fixture.db
+Populated 2 message types successfully!
+populate_exit=0
+
+=== 3. Schema check: prompt_template present ===
+$ sqlite3 $tmp/fixture.db ".schema ref_message_types"
+CREATE TABLE ref_message_types (
+            slug TEXT PRIMARY KEY,
+            step_name TEXT NOT NULL,
+            creator_type TEXT NOT NULL,
+            request_schema TEXT NOT NULL,
+            model_slug TEXT NOT NULL,
+            temperature REAL DEFAULT 0.1,
+            additional_model_settings TEXT,
+            max_retries INTEGER DEFAULT 3,
+            is_active BOOLEAN DEFAULT TRUE,
+            description TEXT,
+            prompt_template TEXT
+        );
+exit=0
+
+=== 4. Both rows have prompt_template (expect ...|1 each) ===
+$ sqlite3 $tmp/fixture.db "SELECT slug, prompt_template IS NOT NULL FROM ref_message_types ORDER BY slug"
+intent_classification|1
+intent_disambiguation|1
+exit=0
+
+=== 5. Idempotency: re-run populate against same fixture ===
+$ .venv/bin/python scripts/populate_message_types.py --db-path $tmp/fixture.db
+Populated 2 message types successfully!
+repopulate_exit=0
+$ sqlite3 $tmp/fixture.db "SELECT COUNT(*) FROM ref_message_types"
+2
+exit=0
+
+=== 6. Failure QA: old table names must NOT exist (expect EMPTY) ===
+$ sqlite3 $tmp/fixture.db "SELECT name FROM sqlite_master WHERE name IN ('message_types','intents')"
+(empty result)
+failure_qa_exit=0
+$ sqlite3 $tmp/fixture.db ".tables"
+messages           ref_message_types  sessions
+
+=== 7. Content spot-check (schema/prompt sources) ===
+$ sqlite3 $tmp/fixture.db "SELECT slug, request_schema LIKE '%greeting%', request_schema LIKE '%interpretive_framings%', prompt_template LIKE '%Classify the following query%' OR prompt_template LIKE '%Analyze the following query%' FROM ref_message_types ORDER BY slug"
+intent_classification|1|0|1
+intent_disambiguation|0|1|1
+exit=0
+-> intent_classification kept inline simple schema (greeting enum) + INTENT_CLASSIFICATION_PROMPT
+-> intent_disambiguation uses config.schemas.INTENT_DISAMBIGUATION_SCHEMA + INTENT_DISAMBIGUATION_PROMPT
+
+=== 8. Static check (basedpyright LSP not installed on host; user declined install) ===
+$ .venv/bin/python -m py_compile scripts/create_new_database.py scripts/populate_message_types.py
+py_compile OK
+exit=0
+
+=== 9. Live DB sanity: UNCHANGED (expect 2) ===
+$ sqlite3 data/chat_database.db "SELECT COUNT(*) FROM ref_message_types"
+2
+exit=0
+(Verified before AND after fixture work; neither script was ever run without --db-path pointing at the mktemp fixture.)
+
+=== 10. Cleanup ===
+$ rm -rf /tmp/tmp.wsybP0xJtN
+exit=0

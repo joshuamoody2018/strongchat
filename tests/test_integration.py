@@ -27,53 +27,37 @@ class TestIntegration(unittest.TestCase):
         # Create test session
         self.session_uuid = self.db.create_session("Integration Test Session", "test")
         
-        # Insert mock message types
-        self.message_types = [
-            {
-                "slug": "intent_classification",
-                "step_name": "Intent Classification",
-                "creator_type": "programmatic",
-                "request_schema": '{"type": "object", "properties": {"intent": {"type": "string"}, "confidence": {"type": "number"}}, "required": ["intent", "confidence"]}',
-                "model_slug": "openai/gpt-3.5-turbo",
-                "temperature": 0.1,
-                "additional_model_settings": '{"max_tokens": 100}',
-                "max_retries": 3,
-                "is_active": True,
-                "description": "Classify user message intent"
-            },
-            {
-                "slug": "intent_disambiguation",
-                "step_name": "Intent Disambiguation",
-                "creator_type": "programmatic",
-                "request_schema": '{"type": "object", "properties": {"recommended_framing": {"type": "string"}}, "required": ["recommended_framing"]}',
-                "model_slug": "openai/gpt-4",
-                "temperature": 0.2,
-                "additional_model_settings": '{"max_tokens": 500}',
-                "max_retries": 2,
-                "is_active": True,
-                "description": "Disambiguate user queries"
-            }
-        ]
-        
-        # Insert message types
-        for msg_type in self.message_types:
-            self.db.cursor.execute('''
-                INSERT INTO message_types 
-                (slug, step_name, creator_type, request_schema, model_slug, temperature, 
-                 additional_model_settings, max_retries, is_active, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                msg_type["slug"],
-                msg_type["step_name"],
-                msg_type["creator_type"],
-                msg_type["request_schema"],
-                msg_type["model_slug"],
-                msg_type["temperature"],
-                msg_type["additional_model_settings"],
-                msg_type["max_retries"],
-                msg_type["is_active"],
-                msg_type["description"]
-            ))
+        # Insert a mock message type for testing
+        self.message_type = {
+            "slug": "intent_classification",
+            "step_name": "Intent Classification",
+            "creator_type": "programmatic",
+            "request_schema": '{"type": "object", "properties": {"intent": {"type": "string"}, "confidence": {"type": "number"}}, "required": ["intent", "confidence"]}',
+            "model_slug": "meta-llama/llama-3.1-8b-instruct",
+            "temperature": 0.1,
+            "additional_model_settings": '{"max_tokens": 500}',
+            "max_retries": 3,
+            "is_active": True,
+            "description": "Classify user message intent"
+        }
+
+        self.db.cursor.execute('''
+            INSERT INTO ref_message_types
+            (slug, step_name, creator_type, request_schema, model_slug, temperature,
+             additional_model_settings, max_retries, is_active, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            self.message_type["slug"],
+            self.message_type["step_name"],
+            self.message_type["creator_type"],
+            self.message_type["request_schema"],
+            self.message_type["model_slug"],
+            self.message_type["temperature"],
+            self.message_type["additional_model_settings"],
+            self.message_type["max_retries"],
+            self.message_type["is_active"],
+            self.message_type["description"]
+        ))
         self.db.conn.commit()
     
     def tearDown(self):
@@ -86,56 +70,31 @@ class TestIntegration(unittest.TestCase):
         """Test complete conversation workflow with multiple messages"""
         wrapper = LLMWrapper(self.test_db)
         
-        # Mock API responses for different message types
-        mock_responses = {
-            "intent_classification": '{"intent": "question", "confidence": 0.95}',
-            "intent_disambiguation": '{"recommended_framing": "biblical_context"}'
-        }
-        
-        async def mock_api_call(prompt, model, **kwargs):
-            # Determine message type from prompt (simplified)
-            if "What is love" in prompt:
-                return mock_responses["intent_classification"]
-            elif "ambiguous" in prompt:
-                return mock_responses["intent_disambiguation"]
-            else:
-                return '{"intent": "question", "confidence": 0.9}'
-        
+        mock_response = '{"intent": "question", "confidence": 0.95}'
+
         with patch.object(wrapper, '_call_api_async', new_callable=AsyncMock) as mock_api:
-            mock_api.side_effect = mock_api_call
-            
+            mock_api.return_value = mock_response
+
             loop = asyncio.get_event_loop()
-            
-            # First message: What is love?
+
             result1 = loop.run_until_complete(
                 wrapper.call_api("intent_classification", "What is love?", self.session_uuid)
             )
-            
-            # Second message: Ambiguous query
+
             result2 = loop.run_until_complete(
-                wrapper.call_api("intent_disambiguation", "What is love ambiguous biblical?", self.session_uuid)
-            )
-            
-            # Third message: Simple question
-            result3 = loop.run_until_complete(
                 wrapper.call_api("intent_classification", "How are you?", self.session_uuid)
             )
-            
-            # Verify all results
-            self.assertTrue(all([r.is_successful() for r in [result1, result2, result3]]))
-            
-            # Verify different message types
+
+            self.assertTrue(result1.is_successful())
+            self.assertTrue(result2.is_successful())
+
             self.assertEqual(result1.message_type_slug, "intent_classification")
-            self.assertEqual(result2.message_type_slug, "intent_disambiguation")
-            self.assertEqual(result3.message_type_slug, "intent_classification")
-            
-            # Verify different models were used (based on configuration)
-            self.assertEqual(result1.raw_response, '{"intent": "question", "confidence": 0.95}')
-            self.assertEqual(result2.raw_response, '{"recommended_framing": "biblical_context"}')
-            
-            # Verify all messages were saved
+            self.assertEqual(result2.message_type_slug, "intent_classification")
+            self.assertEqual(result1.raw_response, mock_response)
+            self.assertEqual(result2.raw_response, mock_response)
+
             messages = self.db.get_messages_by_session_and_type(self.session_uuid)
-            self.assertEqual(len(messages), 3)
+            self.assertEqual(len(messages), 2)
             
             # Verify session management
             session_info = self.db.get_session_name(self.session_uuid)
@@ -189,24 +148,14 @@ class TestIntegration(unittest.TestCase):
     def test_configuration_driven_behavior(self):
         """Test that database configuration drives system behavior"""
         wrapper = LLMWrapper(self.test_db)
-        
-        # Verify different message types have different configurations
-        intent_type = wrapper.get_message_type_config("intent_classification")
-        disambiguation_type = wrapper.get_message_type_config("intent_disambiguation")
-        
+
+        intent_type = wrapper.cache.get_message_type("intent_classification")
+
         self.assertIsNotNone(intent_type)
-        self.assertIsNotNone(disambiguation_type)
-        
-        # Verify different configurations
-        self.assertEqual(intent_type['model_slug'], "openai/gpt-3.5-turbo")
-        self.assertEqual(disambiguation_type['model_slug'], "openai/gpt-4")
-        
+        self.assertEqual(intent_type['model_slug'], "meta-llama/llama-3.1-8b-instruct")
         self.assertEqual(intent_type['temperature'], 0.1)
-        self.assertEqual(disambiguation_type['temperature'], 0.2)
-        
         self.assertEqual(intent_type['max_retries'], 3)
-        self.assertEqual(disambiguation_type['max_retries'], 2)
-        
+
         wrapper.close()
     
     def test_session_isolation(self):
@@ -254,19 +203,25 @@ class TestIntegration(unittest.TestCase):
     
     def test_active_message_types_filtering(self):
         """Test that only active message types are returned"""
-        # Deactivate one message type
-        self.db.cursor.execute("UPDATE message_types SET is_active = 0 WHERE slug = 'intent_disambiguation'")
+        self.db.cursor.execute("""
+            INSERT INTO ref_message_types
+            (slug, step_name, creator_type, request_schema, model_slug,
+             temperature, additional_model_settings, max_retries, is_active, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            'inactive_type', 'Inactive Type', 'programmatic',
+            '{"type":"object"}',
+            'meta-llama/llama-3.1-8b-instruct',
+            0.1, '{}', 3, 0, 'Inactive test type'
+        ))
         self.db.conn.commit()
-        
-        # Test that only active types are returned
+
         active_types = self.db.get_active_message_types()
-        
-        # Should only have intent_classification active
+
         self.assertEqual(len(active_types), 1)
         self.assertEqual(active_types[0]['slug'], 'intent_classification')
-        
-        # Test that deactivated type is not returned
-        deactivated_type = self.db.get_message_type('intent_disambiguation')
+
+        deactivated_type = self.db.get_message_type('inactive_type')
         self.assertIsNone(deactivated_type)
     
     def test_schema_validation_error_handling(self):

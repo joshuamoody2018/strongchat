@@ -7,7 +7,7 @@ import sys
 sys.path.insert(0, 'src')
 
 from services.sqlite.database import ChatDatabase
-from services.llm.wrapper import LLMWrapper
+from services.pipeline import PipelineRunner
 from services.session import ChatSession
 from services.llm.aimessage import AIMessage
 from config.cache import GlobalReferenceCache
@@ -23,12 +23,12 @@ except ImportError:
 if DOTENV_AVAILABLE:
     load_dotenv()
 
-def main():
+async def main():
     db = ChatDatabase()
     cache = GlobalReferenceCache()
-    llm_wrapper = LLMWrapper()
+    pipeline_runner = PipelineRunner()
     
-    print("SQLite Chat Application")
+    print("StrongChat - Bible Verse Retrieval System")
     print("Type 'quit' to exit, 'new' to create new session, 'sessions' to list sessions")
     
     current_session = None
@@ -95,57 +95,66 @@ def main():
             
             if user_input:
                 try:
-                    # Use LLM wrapper for intent classification
-                    intent_message = llm_wrapper.sync_call_api(
-                        message_type_slug="intent_classification",
-                        unique_prompt=user_input,
-                        session_uuid=current_session.uuid
-                    )
+                    # Use PipelineRunner for intent generation
+                    result = await pipeline_runner.run_intent_only(query=user_input, session_uuid=current_session.uuid)
                     
-                    # Add message to session
+                    intent_message = AIMessage(
+                        session_uuid=current_session.uuid,
+                        message_type_slug="intent_generation",
+                        unique_prompt=f"Intent analysis for: {user_input}"
+                    )
+                    intent_message.mark_success(str(result['intents']))
                     current_session.add_message(intent_message)
                     
-                    # Extract intent from parsed response using cached schema
-                    intent_config = cache.get_message_type("intent_classification")
-                    intent_data = intent_message.get_parsed_response(intent_config["request_schema"])
-                    intent = intent_data.get("intent", "unknown")
-                    confidence = intent_data.get("confidence", 0.0)
+                    # Extract the primary intent for response
+                    primary_intent = None
+                    for intent in result['intents']:
+                        if intent.get('is_primary'):
+                            primary_intent = intent
+                            break
                     
-                    print(f"Intent: {intent} (confidence: {confidence:.2f})")
-                    
-                    # For demonstration, use a simple response
-                    if intent == "greeting":
-                        ai_response = f"Hello! I'm here to help you with biblical questions. What would you like to know?"
-                    elif intent == "question":
-                        ai_response = f"I understand you're asking about: '{user_input}'. Let me help you with that biblical question."
-                    elif intent == "goodbye":
-                        ai_response = "Goodbye! Feel free to come back anytime with your biblical questions."
+                    if primary_intent:
+                        intent_text = primary_intent.get('interpretation', 'unknown')
+                        themes = primary_intent.get('themes', [])
+                        confidence = primary_intent.get('confidence', 0.0)
+                        
+                        print(f"Primary Intent: {intent_text}")
+                        print(f"Themes: {', '.join(themes)}")
+                        print(f"Confidence: {confidence:.2f}")
+                        
+                        # Simple response based on intent
+                        if any(theme in themes for theme in ['greeting', 'hello']):
+                            ai_response = f"Hello! I understand you're asking about: {intent_text}"
+                        elif any(theme in themes for theme in ['goodbye', 'farewell']):
+                            ai_response = f"Goodbye! Feel free to return with more questions about {intent_text}"
+                        else:
+                            ai_response = f"I understand you're asking about: {intent_text}. Let me help you find biblical insights on this topic."
+                        
+                        # Create AI response message
+                        ai_message = AIMessage(
+                            session_uuid=current_session.uuid,
+                            message_type_slug="llm_response",
+                            unique_prompt=ai_response
+                        )
+                        ai_message.mark_success(ai_response)
+                        current_session.add_message(ai_message)
+                        
+                        # Store messages in database
+                        db.create_message_with_type(
+                            session_uuid=current_session.uuid,
+                            message_type_slug="human_input",
+                            unique_prompt=user_input
+                        )
+                        db.create_message_with_type(
+                            session_uuid=current_session.uuid,
+                            message_type_slug="llm_response",
+                            unique_prompt=ai_response
+                        )
+                        
+                        print(f"AI: {ai_response}")
                     else:
-                        ai_response = f"I understand you said: '{user_input}'. How can I help you today?"
-                    
-                    # Create AI response message
-                    ai_message = AIMessage(
-                        session_uuid=current_session.uuid,
-                        message_type_slug="llm_response",
-                        unique_prompt=ai_response
-                    )
-                    ai_message.mark_success(ai_response)
-                    current_session.add_message(ai_message)
-                    
-                    # Store messages in database
-                    db.create_message_with_type(
-                        session_uuid=current_session.uuid,
-                        message_type_slug="human_input",
-                        unique_prompt=user_input
-                    )
-                    db.create_message_with_type(
-                        session_uuid=current_session.uuid,
-                        message_type_slug="llm_response",
-                        unique_prompt=ai_response
-                    )
-                    
-                    print(f"AI: {ai_response}")
-                    
+                        print("Could not determine primary intent.")
+                
                 except Exception as e:
                     print(f"Error: {e}")
                     # Store error in database and session
@@ -164,10 +173,11 @@ def main():
                         error_text=str(e)
                     )
     
-    llm_wrapper.close()
+    pipeline_runner.close()
     cache.close()
     db.close()
     print("Goodbye!")
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())

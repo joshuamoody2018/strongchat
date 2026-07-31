@@ -69,43 +69,34 @@ The four recorded message types used by the HyDE-retrieval pipeline are:
 
 ## Usage Examples
 
-### Basic Intent Disambiguation
+### Basic Schema-Driven Call
 
 ```python
 from services.llm.client import LLMClient
+from config.schemas import INTENT_GENERATION_SCHEMA
+from config.prompts import INTENT_GENERATION_PROMPT
+from services.llm.parser import BaseResponseModel
 import asyncio
+
+
+class IntentGenerationResponse(BaseResponseModel):
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
 
 async def main():
     client = LLMClient()
-    
-    try:
-        response = await client.disambiguate_intent("why do bad things happen")
-        print(f"Recommended framing: {response.recommended_framing}")
-        for framing in response.interpretive_framings:
-            print(f"- {framing['framing_id']}: {framing['interpretation']}")
-    except Exception as e:
-        print(f"Error: {e}")
+    response = await client.call_with_schema(
+        prompt_template=INTENT_GENERATION_PROMPT,
+        response_schema=INTENT_GENERATION_SCHEMA,
+        response_model=IntentGenerationResponse,
+        model="mistralai/mistral-small-24b-instruct-2501",
+        query="why do bad things happen"
+    )
+    print(response)
+
 
 asyncio.run(main())
-```
-
-### Custom Schema and Prompt
-
-```python
-from services.llm.client import LLMClient
-from config.schemas import INTENT_DISAMBIGUATION_SCHEMA
-
-async def custom_intent_analysis(query: str):
-    client = LLMClient()
-    
-    response = await client.call_with_schema(
-        prompt_template=INTENT_DISAMBIGUATION_PROMPT,
-        response_schema=INTENT_DISAMBIGUATION_SCHEMA,
-        response_model_name="intent_disambiguation",
-        query=query
-    )
-    
-    return response
 ```
 
 ## Configuration
@@ -114,7 +105,7 @@ async def custom_intent_analysis(query: str):
 
 ```bash
 OPENROUTER_API_KEY=your_api_key_here
-MODEL_SLUG_INTENTS=openai/gpt-3.5-turbo
+MODEL_SLUG_INTENTS=mistralai/mistral-small-24b-instruct-2501
 ```
 
 ### Model Configuration
@@ -151,8 +142,24 @@ from services.llm.exceptions import (
 ### Error Recovery
 
 ```python
+from config.schemas import INTENT_GENERATION_SCHEMA
+from config.prompts import INTENT_GENERATION_PROMPT
+from services.llm.parser import BaseResponseModel
+
+
+class IntentGenerationResponse(BaseResponseModel):
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+
 try:
-    response = await client.disambiguate_intent(query)
+    response = await client.call_with_schema(
+        prompt_template=INTENT_GENERATION_PROMPT,
+        response_schema=INTENT_GENERATION_SCHEMA,
+        response_model=IntentGenerationResponse,
+        model="mistralai/mistral-small-24b-instruct-2501",
+        query=query
+    )
 except MaxRetriesExceededError:
     # Handle API failure after 3 retries
     print("API temporarily unavailable, using fallback logic")
@@ -164,26 +171,27 @@ except ResponseValidationError:
 
 ## JSON Schema Structure
 
-### Intent Disambiguation Schema
+### Intent Generation Schema
 
 ```json
 {
   "query_analysis": {
     "original_query": "string",
-    "ambiguous_elements": ["string"],
-    "core_question": "string",
+    "core_questions": ["string"],
     "context_clues": ["string"]
   },
-  "interpretive_framings": [
+  "intents": [
     {
-      "framing_id": "string",
+      "intent_id": "string",
       "interpretation": "string",
-      "keywords": ["string"],
-      "disambiguation_note": "string",
-      "confidence": 0.0-1.0
+      "keywords_explicit": ["string"],
+      "keywords_inferred": ["string"],
+      "themes": ["string"],
+      "confidence": 0.0-1.0,
+      "is_primary": true
     }
   ],
-  "recommended_framing": "string"
+  "recommended_search_approach": "string"
 }
 ```
 

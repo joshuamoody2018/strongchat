@@ -1,0 +1,95 @@
+Evidence — Task 10: Live-test intent generation and refine the prompt until green
+=================================================================================
+
+Environment
+-----------
+- Command prefix: set -a; . ./.env; set +a
+- Interpreter: .venv/bin/python
+- Test file: tests/system/test_intent_generation.py
+- Model (intent_generation): openai/gpt-4.1-mini, temperature=0.2, max_tokens=800
+
+Acceptance run 1 — current prompt, no refinement needed
+---------------------------------------------------------
+Command: set -a; . ./.env; set +a; .venv/bin/python tests/system/test_intent_generation.py
+Exit code: 0
+
+Output:
+=== Live Intent Generation System Test ===
+
+Probe: why do bad things happen to good people
+  Session: 1c3de3fe-e85f-44ba-9093-96eb97839dcf
+  Intents returned: 4
+  PASS: why do bad things happen to good people
+Probe: how do I deal with anxiety about the future
+  Session: c2c407cb-c06b-45e2-8885-b4db2ffaa669
+  Intents returned: 3
+  PASS: how do I deal with anxiety about the future
+Probe: what does the Bible say about forgiving someone who hurt me
+  Session: 1ef69080-68ba-4e62-8eb0-61667ee6f6d9
+  Intents returned: 3
+  PASS: what does the Bible say about forgiving someone wh
+
+=== Result ===
+PASS
+
+Note: The prompt produced valid schema-conforming responses for all three probes on the first iteration, so no prompt edits were required.
+
+Failure QA — invalid model slug
+-------------------------------
+Setup:
+  sqlite3 data/chat_database.db "UPDATE ref_message_types SET model_slug='openai/nonexistent' WHERE slug='intent_generation';"
+  SELECT result: intent_generation|openai/nonexistent
+
+Command: set -a; . ./.env; set +a; .venv/bin/python tests/system/test_intent_generation.py
+Exit code: 1
+
+Output:
+=== Live Intent Generation System Test ===
+
+Probe: why do bad things happen to good people
+  Session: 98e47171-f1bb-4ca4-9337-803c5616cab5
+  ERROR: API returned 400: {"error":{"message":"openai/nonexistent is not a valid model ID","code":400},"user_id":"user_3GvRmJL1lLKEON1YnhtgxVM844a"}
+Probe: how do I deal with anxiety about the future
+  Session: 7c4c0306-f10b-476b-95ff-461e6b4b8927
+  ERROR: API returned 400: {"error":{"message":"openai/nonexistent is not a valid model ID","code":400},"user_id":"user_3GvRmJL1lLKEON1YnhtgxVM844a"}
+Probe: what does the Bible say about forgiving someone who hurt me
+  Session: 8dfbf3c3-2f35-4382-80f3-4a97a49acc32
+  ERROR: API returned 400: {"error":{"message":"openai/nonexistent is not a valid model ID","code":400},"user_id":"user_3GvRmJL1lLKEON1YnhtgxVM844a"}
+
+=== Result ===
+FAIL
+
+Restore + re-run
+----------------
+Setup:
+  sqlite3 data/chat_database.db "UPDATE ref_message_types SET model_slug='openai/gpt-4.1-mini' WHERE slug='intent_generation';"
+  SELECT result: intent_generation|openai/gpt-4.1-mini
+
+Command: set -a; . ./.env; set +a; .venv/bin/python tests/system/test_intent_generation.py
+Exit code: 0
+
+Output:
+=== Live Intent Generation System Test ===
+
+Probe: why do bad things happen to good people
+  Session: b5bcadc2-a678-436d-8493-0d6336de2066
+  Intents returned: 4
+  PASS: why do bad things happen to good people
+Probe: how do I deal with anxiety about the future
+  Session: 95288796-1828-4f17-9072-b71b00364219
+  Intents returned: 3
+  PASS: how do I deal with anxiety about the future
+Probe: what does the Bible say about forgiving someone who hurt me
+  Session: 4989cad8-b836-43b2-96e0-3c5694410dc2
+  Intents returned: 3
+  PASS: what does the Bible say about forgiving someone wh
+
+=== Result ===
+PASS
+
+Summary
+-------
+- 3/3 probes passed on the first prompt iteration; no prompt refinement was necessary.
+- Schema enforcement, primary-intent requirement, and DB-record assertions all held.
+- Failure QA correctly surfaced the OpenRouter 400 "not a valid model ID" error and exited non-zero.
+- Model slug restored to openai/gpt-4.1-mini; green run confirmed.

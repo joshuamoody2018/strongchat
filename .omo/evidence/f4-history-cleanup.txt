@@ -1,0 +1,269 @@
+F4 History Cleanup — Remove .omo/ from checkpoint commits 615e56a and eddb892
+================================================================================
+
+Backup ref created: backup-f4-before -> 739cd321072444e91279812302a1e6f8724afbbc
+Base commit: 8695c66
+Method: temporary git worktree + git rebase -i 8695c66 with 615e56a and eddb892 marked edit.
+At each stop .omo/ was removed from the index; the second stop resolved modify/delete conflicts by removing .omo/ and keeping AGENTS.md, then git rebase --continue.
+
+Verification commands (run in original worktree after reset):
+  $ GIT_MASTER=1 git log --name-only --oneline 8695c66..HEAD | grep -E '^\\.omo/'
+  (no output)
+
+  $ GIT_MASTER=1 git log --oneline 8695c66..HEAD | wc -l
+  23
+
+  $ GIT_MASTER=1 git status --short
+  M .gitignore
+  M README.md
+  M data/chat_database.db
+  M src/config/__pycache__/__init__.cpython-312.pyc
+  M src/config/__pycache__/cache.cpython-312.pyc
+  M src/config/__pycache__/prompts.cpython-312.pyc
+  M src/config/__pycache__/schemas.cpython-312.pyc
+  M src/services/sqlite/__pycache__/database.cpython-312.pyc
+  ? .omo/
+  ? .opencode/
+  ? data/chat_database.db.pre-pipeline.bak
+  ? opencode.json
+
+AGENTS.md Code Structure section still lists the new service modules (base.py, intent/, hyde/, embeddings/, vectordb/, retrieval/, pipeline/).
+
+BEFORE (git log --name-only --oneline 8695c66..HEAD):
+------------------------------------------------------------
+739cd32 Document HyDE retrieval pipeline architecture
+AGENTS.md
+LLM_FRAMEWORK.md
+architecture/README.md
+architecture/implementation-status.md
+architecture/pipeline-hyde-retrieval.md
+todo.md
+0265420 Add end-to-end pipeline integration test
+tests/system/test_pipeline_e2e.py
+81eb58e Add pipeline orchestrator and CLI runner
+scripts/run_pipeline.py
+src/services/pipeline/__init__.py
+src/services/pipeline/runner.py
+b9aca86 Add consolidated offline step tests for pipeline services
+scripts/test_pipeline_offline.py
+3b5cbf0 Add async retrieval service for HyDE documents
+scripts/test_retrieval_service.py
+src/services/retrieval/__init__.py
+src/services/retrieval/service.py
+740bb9b Add HyDE generation service with asyncio parallel calls
+scripts/test_hyde_service.py
+src/services/hyde/__init__.py
+src/services/hyde/service.py
+tests/system/test_hyde_generation.py
+c83f674 Add Chroma verse store and corpus ingest pipeline
+scripts/ingest_corpus.py
+src/services/vectordb/__init__.py
+src/services/vectordb/store.py
+7f13659 Add live intent generation system test
+tests/system/test_intent_generation.py
+95d30c4 Add batched OpenRouter embedding service
+scripts/test_embedding_service.py
+src/services/embeddings/__init__.py
+src/services/embeddings/service.py
+2b52c67 Update migration test for hyde_generation row
+scripts/test_migration.py
+7da04cf Add HyDE generation schema, prompt, and message type
+scripts/migrate_pipeline_message_types.py
+scripts/test_hyde_schema.py
+src/config/__init__.py
+src/config/prompts.py
+src/config/schemas.py
+d93ec60 Add intent generation service with offline tests
+scripts/test_intent_service.py
+src/services/intent/__init__.py
+src/services/intent/service.py
+cda1719 Update migration test for intent_generation row
+scripts/test_migration.py
+7d7b770 Add refined intent generation schema, prompt, and message type
+scripts/migrate_pipeline_message_types.py
+scripts/test_intent_schema.py
+src/config/__init__.py
+src/config/prompts.py
+src/config/schemas.py
+f34683c Add Bible corpus download and validation script
+scripts/download_bible_corpus.py
+3178402 Add BaseService shared foundation for pipeline services
+src/services/base.py
+2c23360 Add pipeline message-type migration, FK enforcement, and cache injection
+scripts/migrate_pipeline_message_types.py
+scripts/test_migration.py
+src/config/cache.py
+src/services/sqlite/database.py
+eddb892 Record partial todo 6 cache injection state in checkpoint notes
+.omo/boulder.json
+.omo/for-user-review.md
+.omo/notepads/hyde-retrieval-pipeline/learnings.md
+.omo/run-continuation/ses_059266716ffeIEkHwmqepYh3zC.json
+.omo/run-continuation/ses_05986d22effeLFhGzi8V0dOUvU.json
+AGENTS.md
+615e56a Checkpoint HyDE retrieval pipeline progress and session state (5/24 tasks)
+.omo/boulder.json
+.omo/drafts/hyde-retrieval-pipeline.md
+.omo/evidence/task-1-hyde-retrieval-pipeline.txt
+.omo/evidence/task-2-hyde-retrieval-pipeline.txt
+.omo/evidence/task-3-hyde-retrieval-pipeline.txt
+.omo/evidence/task-4-hyde-retrieval-pipeline.txt
+.omo/evidence/task-5-hyde-retrieval-pipeline.txt
+.omo/evidence/task-checkpoint-hyde-retrieval-pipeline.txt
+.omo/for-user-review.md
+.omo/notepads/hyde-retrieval-pipeline/decisions.md
+.omo/notepads/hyde-retrieval-pipeline/issues.md
+.omo/notepads/hyde-retrieval-pipeline/learnings.md
+.omo/notepads/hyde-retrieval-pipeline/problems.md
+.omo/plans/hyde-retrieval-pipeline.md
+.omo/run-continuation/ses_0592d876cffelbhH3TTwhp06ML.json
+.omo/run-continuation/ses_05930f536ffeF9Jlgmr79gDigw.json
+.omo/run-continuation/ses_0593a901dffepGDrGaxt5sPRB7.json
+.omo/run-continuation/ses_0593c9a03ffehAeW1oTDVa5vh1.json
+.omo/run-continuation/ses_0594681edffenUOwaevdHE1K2J.json
+.omo/run-continuation/ses_0594786f5ffedxPwgJfN8Cd6Zx.json
+.omo/run-continuation/ses_0594a226dffecg1FJ8qB7Q2exy.json
+.omo/run-continuation/ses_059500653ffehQjWTFlS0dsFYj.json
+.omo/run-continuation/ses_0595051d4ffeTIxgfm5UmElWKE.json
+.omo/run-continuation/ses_0596ada24ffephKD64eB6h56jT.json
+.omo/run-continuation/ses_0596b7b51ffecgH09v0zBUBU7U.json
+.omo/run-continuation/ses_0598368e1ffe0CvuQJdrvI46NP.json
+.omo/run-continuation/ses_05983c696ffeuhjFwbZlklJ6Ke.json
+.omo/run-continuation/ses_05984029effesgCax6lSMatHsf.json
+.omo/run-continuation/ses_059843718ffeqPoLrm13L53Qz3.json
+.omo/run-continuation/ses_059846e38ffe2iN8yY0hEMMokz.json
+.omo/run-continuation/ses_05986d22effeLFhGzi8V0dOUvU.json
+.omo/start-work/ledger.jsonl
+AGENTS.md
+a0b6be3 Align database setup scripts with ref_message_types schema
+scripts/create_new_database.py
+scripts/populate_message_types.py
+54cab26 Add OpenRouter embeddings API smoke check script
+scripts/check_embeddings_api.py
+a434510 Fix ref_message_types JOINs and remove dead code
+scripts/test_database_queries.py
+scripts/test_main.py
+src/config/enums.py
+src/services/sqlite/database.py
+7a96d38 Add project venv and pinned requirements.txt
+requirements.txt
+
+BEFORE .omo/ paths (unique, sorted):
+.omo/boulder.json
+.omo/drafts/hyde-retrieval-pipeline.md
+.omo/evidence/task-1-hyde-retrieval-pipeline.txt
+.omo/evidence/task-2-hyde-retrieval-pipeline.txt
+.omo/evidence/task-3-hyde-retrieval-pipeline.txt
+.omo/evidence/task-4-hyde-retrieval-pipeline.txt
+.omo/evidence/task-5-hyde-retrieval-pipeline.txt
+.omo/evidence/task-checkpoint-hyde-retrieval-pipeline.txt
+.omo/for-user-review.md
+.omo/notepads/hyde-retrieval-pipeline/decisions.md
+.omo/notepads/hyde-retrieval-pipeline/issues.md
+.omo/notepads/hyde-retrieval-pipeline/learnings.md
+.omo/notepads/hyde-retrieval-pipeline/problems.md
+.omo/plans/hyde-retrieval-pipeline.md
+.omo/run-continuation/ses_059266716ffeIEkHwmqepYh3zC.json
+.omo/run-continuation/ses_0592d876cffelbhH3TTwhp06ML.json
+.omo/run-continuation/ses_05930f536ffeF9Jlgmr79gDigw.json
+.omo/run-continuation/ses_0593a901dffepGDrGaxt5sPRB7.json
+.omo/run-continuation/ses_0593c9a03ffehAeW1oTDVa5vh1.json
+.omo/run-continuation/ses_0594681edffenUOwaevdHE1K2J.json
+.omo/run-continuation/ses_0594786f5ffedxPwgJfN8Cd6Zx.json
+.omo/run-continuation/ses_0594a226dffecg1FJ8qB7Q2exy.json
+.omo/run-continuation/ses_059500653ffehQjWTFlS0dsFYj.json
+.omo/run-continuation/ses_0595051d4ffeTIxgfm5UmElWKE.json
+.omo/run-continuation/ses_0596ada24ffephKD64eB6h56jT.json
+.omo/run-continuation/ses_0596b7b51ffecgH09v0zBUBU7U.json
+.omo/run-continuation/ses_0598368e1ffe0CvuQJdrvI46NP.json
+.omo/run-continuation/ses_05983c696ffeuhjFwbZlklJ6Ke.json
+.omo/run-continuation/ses_05984029effesgCax6lSMatHsf.json
+.omo/run-continuation/ses_059843718ffeqPoLrm13L53Qz3.json
+.omo/run-continuation/ses_059846e38ffe2iN8yY0hEMMokz.json
+.omo/run-continuation/ses_05986d22effeLFhGzi8V0dOUvU.json
+.omo/start-work/ledger.jsonl
+
+AFTER (git log --name-only --oneline 8695c66..HEAD):
+-----------------------------------------------------------
+f36494f Document HyDE retrieval pipeline architecture
+AGENTS.md
+LLM_FRAMEWORK.md
+architecture/README.md
+architecture/implementation-status.md
+architecture/pipeline-hyde-retrieval.md
+todo.md
+82e4d8b Add end-to-end pipeline integration test
+tests/system/test_pipeline_e2e.py
+1f8ef2a Add pipeline orchestrator and CLI runner
+scripts/run_pipeline.py
+src/services/pipeline/__init__.py
+src/services/pipeline/runner.py
+3f55b48 Add consolidated offline step tests for pipeline services
+scripts/test_pipeline_offline.py
+cdd1f1c Add async retrieval service for HyDE documents
+scripts/test_retrieval_service.py
+src/services/retrieval/__init__.py
+src/services/retrieval/service.py
+58b22ae Add HyDE generation service with asyncio parallel calls
+scripts/test_hyde_service.py
+src/services/hyde/__init__.py
+src/services/hyde/service.py
+tests/system/test_hyde_generation.py
+a055ee0 Add Chroma verse store and corpus ingest pipeline
+scripts/ingest_corpus.py
+src/services/vectordb/__init__.py
+src/services/vectordb/store.py
+22c1839 Add live intent generation system test
+tests/system/test_intent_generation.py
+85cec2c Add batched OpenRouter embedding service
+scripts/test_embedding_service.py
+src/services/embeddings/__init__.py
+src/services/embeddings/service.py
+97ccbe8 Update migration test for hyde_generation row
+scripts/test_migration.py
+3e893b7 Add HyDE generation schema, prompt, and message type
+scripts/migrate_pipeline_message_types.py
+scripts/test_hyde_schema.py
+src/config/__init__.py
+src/config/prompts.py
+src/config/schemas.py
+0c59092 Add intent generation service with offline tests
+scripts/test_intent_service.py
+src/services/intent/__init__.py
+src/services/intent/service.py
+d5d4b38 Update migration test for intent_generation row
+scripts/test_migration.py
+f7a035c Add refined intent generation schema, prompt, and message type
+scripts/migrate_pipeline_message_types.py
+scripts/test_intent_schema.py
+src/config/__init__.py
+src/config/prompts.py
+src/config/schemas.py
+44cb5ec Add Bible corpus download and validation script
+scripts/download_bible_corpus.py
+247d804 Add BaseService shared foundation for pipeline services
+src/services/base.py
+c2c1d33 Add pipeline message-type migration, FK enforcement, and cache injection
+scripts/migrate_pipeline_message_types.py
+scripts/test_migration.py
+src/config/cache.py
+src/services/sqlite/database.py
+c6012f6 Record partial todo 6 cache injection state in checkpoint notes
+AGENTS.md
+c50e499 Checkpoint HyDE retrieval pipeline progress and session state (5/24 tasks)
+AGENTS.md
+a0b6be3 Align database setup scripts with ref_message_types schema
+scripts/create_new_database.py
+scripts/populate_message_types.py
+54cab26 Add OpenRouter embeddings API smoke check script
+scripts/check_embeddings_api.py
+a434510 Fix ref_message_types JOINs and remove dead code
+scripts/test_database_queries.py
+scripts/test_main.py
+src/config/enums.py
+src/services/sqlite/database.py
+7a96d38 Add project venv and pinned requirements.txt
+requirements.txt
+
+AFTER .omo/ paths (unique, sorted):
+(none)

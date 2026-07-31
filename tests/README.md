@@ -124,10 +124,10 @@ MOCK_RESPONSES = {
         "intent": "question",
         "confidence": 0.95
     },
-    "intent_disambiguation": {
+    "intent_generation": {
         "query_analysis": {...},
-        "interpretive_framings": [...],
-        "recommended_framing": "framing_1"
+        "intents": [...],
+        "recommended_search_approach": "approach"
     }
 }
 ```
@@ -184,7 +184,7 @@ These tests are designed to run in CI environments:
 
 When adding new message types or pipeline steps:
 
-1. **Add to message_types table**: Update `populate_message_types.py`
+1. **Add to ref_message_types table**: Update `populate_message_types.py` or `migrate_pipeline_message_types.py`
 2. **Create test scenario**: Add to appropriate test file
 3. **Verify integration**: Test complete workflow
 4. **Document**: Update this README with new test patterns

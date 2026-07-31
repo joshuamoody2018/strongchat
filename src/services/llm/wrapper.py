@@ -225,5 +225,5 @@ class LLMWrapper:
         except RuntimeError:
             asyncio.run(self.db_port.close())
         else:
-            loop.run_until_complete(self.db_port.close())
+            asyncio.create_task(self.db_port.close())
         self.cache.close()

@@ -1,0 +1,529 @@
+=== TASK 1: hyde-retrieval-pipeline — Create venv + pinned requirements.txt ===
+Date: 2026-07-28T03:06:54Z
+Host: Linux vmi3465496 6.8.0-124-generic #124-Ubuntu SMP PREEMPT_DYNAMIC Tue May 26 13:00:45 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+Python: Python 3.12.3 (/usr/bin/python3)
+Repo:  /home/joshua/projects/strongchat
+Git HEAD: 8695c6690b1e51ba0a3a0c3bddd3f2ec9e076f17
+Git branch: dev
+
+=== STEP 1: python3 -m venv .venv ===
+The virtual environment was not created successfully because ensurepip is not
+available.  On Debian/Ubuntu systems, you need to install the python3-venv
+package using the following command.
+
+    apt install python3.12-venv
+
+You may need to use sudo with that command.  After installing the python3-venv
+package, recreate your virtual environment.
+
+Failing command: /home/joshua/projects/strongchat/.venv/bin/python3
+
+exit=1
+
+=== STEP 1a: Cleanup failed .venv ===
+ls: cannot access '.venv': No such file or directory
+(removed)
+
+=== STEP 1b: sudo apt install -y python3.12-venv ===
+sudo: a terminal is required to read the password; either use the -S option to read from standard input or configure an askpass helper
+sudo: a password is required
+apt exit=1
+
+=== STEP 1c: python3 -m venv .venv (retry) ===
+The virtual environment was not created successfully because ensurepip is not
+available.  On Debian/Ubuntu systems, you need to install the python3-venv
+package using the following command.
+
+    apt install python3.12-venv
+
+You may need to use sudo with that command.  After installing the python3-venv
+package, recreate your virtual environment.
+
+Failing command: /home/joshua/projects/strongchat/.venv/bin/python3
+
+venv exit=1
+
+=== STEP 1d: verify .venv structure ===
+total 8
+drwxrwxr-x 2 joshua joshua 4096 Jul 28 05:07 .
+drwxrwxr-x 5 joshua joshua 4096 Jul 28 05:07 ..
+lrwxrwxrwx 1 joshua joshua    7 Jul 28 05:07 python -> python3
+lrwxrwxrwx 1 joshua joshua   16 Jul 28 05:07 python3 -> /usr/bin/python3
+lrwxrwxrwx 1 joshua joshua    7 Jul 28 05:07 python3.12 -> python3
+Python 3.12.3
+executable: /home/joshua/projects/strongchat/.venv/bin/python
+base_prefix: /usr
+prefix: /home/joshua/projects/strongchat/.venv
+
+=== STEP 1: python3 -m venv .venv (final result) ===
+venv exit=0
+total 32
+drwxrwxr-x 2 joshua joshua 4096 Jul 28 05:08 .
+drwxrwxr-x 5 joshua joshua 4096 Jul 28 05:08 ..
+-rw-r--r-- 1 joshua joshua 9033 Jul 28 05:08 Activate.ps1
+-rw-r--r-- 1 joshua joshua 2066 Jul 28 05:08 activate
+-rw-r--r-- 1 joshua joshua  936 Jul 28 05:08 activate.csh
+-rw-r--r-- 1 joshua joshua 2211 Jul 28 05:08 activate.fish
+lrwxrwxrwx 1 joshua joshua    7 Jul 28 05:08 python -> python3
+lrwxrwxrwx 1 joshua joshua   16 Jul 28 05:08 python3 -> /usr/bin/python3
+lrwxrwxrwx 1 joshua joshua    7 Jul 28 05:08 python3.12 -> python3
+Python 3.12.3
+executable: /home/joshua/projects/strongchat/.venv/bin/python
+prefix: /home/joshua/projects/strongchat/.venv
+base_prefix: /usr
+
+=== STEP 1a: First 'python3 -m venv .venv' FAILED (ensurepip missing) ===
+Reason: python3.12-venv is not installed on this Ubuntu 24.04 host.
+Tried fallback 'sudo apt install -y python3.12-venv' — sudo requires a password that is not available in this non-interactive context (sudo -n failed; 'sudo: a password is required').
+Workaround: 'python3 -m venv --without-pip .venv' + bootstrap pip via get-pip.py.
+This keeps the venv fully isolated and does not touch the system Python (PEP 668 / --break-system-packages not used).
+
+=== STEP 1b: Bootstrap pip into .venv via get-pip.py ===
+get-pip.py size: 2226848 bytes
+Collecting pip
+  Downloading pip-26.1.2-py3-none-any.whl.metadata (4.6 kB)
+Downloading pip-26.1.2-py3-none-any.whl (1.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.8/1.8 MB 8.2 MB/s  0:00:00
+Installing collected packages: pip
+Successfully installed pip-26.1.2
+get-pip exit=0
+
+=== STEP 1c: Verify pip in venv ===
+pip 26.1.2 from /home/joshua/projects/strongchat/.venv/lib/python3.12/site-packages/pip (python 3.12)
+pip module version: 26.1.2
+
+=== STEP 2: requirements.txt written ===
+aiohttp>=3.9,<4
+jsonschema>=4.10,<5
+requests>=2.31,<3
+python-dotenv>=1.0,<2
+chromadb>=1.0,<2
+
+Pin count check: 5 (expected 5)
+
+=== STEP 3a: .venv/bin/pip install --upgrade pip ===
+Requirement already satisfied: pip in ./.venv/lib/python3.12/site-packages (26.1.2)
+exit=0
+
+Current pip version:
+pip 26.1.2 from /home/joshua/projects/strongchat/.venv/lib/python3.12/site-packages/pip (python 3.12)
+
+=== STEP 3b: .venv/bin/pip install -r requirements.txt ===
+Collecting aiohttp<4,>=3.9 (from -r requirements.txt (line 1))
+  Downloading aiohttp-3.14.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (8.3 kB)
+Collecting jsonschema<5,>=4.10 (from -r requirements.txt (line 2))
+  Downloading jsonschema-4.26.0-py3-none-any.whl.metadata (7.6 kB)
+Collecting requests<3,>=2.31 (from -r requirements.txt (line 3))
+  Downloading requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
+Collecting python-dotenv<2,>=1.0 (from -r requirements.txt (line 4))
+  Downloading python_dotenv-1.2.2-py3-none-any.whl.metadata (27 kB)
+Collecting chromadb<2,>=1.0 (from -r requirements.txt (line 5))
+  Downloading chromadb-1.5.9-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (5.0 kB)
+Collecting aiohappyeyeballs>=2.5.0 (from aiohttp<4,>=3.9->-r requirements.txt (line 1))
+  Downloading aiohappyeyeballs-2.7.1-py3-none-any.whl.metadata (5.9 kB)
+Collecting aiosignal>=1.4.0 (from aiohttp<4,>=3.9->-r requirements.txt (line 1))
+  Downloading aiosignal-1.4.0-py3-none-any.whl.metadata (3.7 kB)
+Collecting attrs>=17.3.0 (from aiohttp<4,>=3.9->-r requirements.txt (line 1))
+  Downloading attrs-26.1.0-py3-none-any.whl.metadata (8.8 kB)
+Collecting frozenlist>=1.1.1 (from aiohttp<4,>=3.9->-r requirements.txt (line 1))
+  Downloading frozenlist-1.8.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (20 kB)
+Collecting multidict<7.0,>=4.5 (from aiohttp<4,>=3.9->-r requirements.txt (line 1))
+  Downloading multidict-6.7.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.3 kB)
+Collecting propcache>=0.2.0 (from aiohttp<4,>=3.9->-r requirements.txt (line 1))
+  Downloading propcache-0.5.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (16 kB)
+Collecting typing_extensions>=4.4 (from aiohttp<4,>=3.9->-r requirements.txt (line 1))
+  Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting yarl<2.0,>=1.17.0 (from aiohttp<4,>=3.9->-r requirements.txt (line 1))
+  Downloading yarl-1.24.5-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (103 kB)
+Collecting jsonschema-specifications>=2023.03.6 (from jsonschema<5,>=4.10->-r requirements.txt (line 2))
+  Downloading jsonschema_specifications-2025.9.1-py3-none-any.whl.metadata (2.9 kB)
+Collecting referencing>=0.28.4 (from jsonschema<5,>=4.10->-r requirements.txt (line 2))
+  Downloading referencing-0.37.0-py3-none-any.whl.metadata (2.8 kB)
+Collecting rpds-py>=0.25.0 (from jsonschema<5,>=4.10->-r requirements.txt (line 2))
+  Downloading rpds_py-2026.6.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.1 kB)
+Collecting charset_normalizer<4,>=2 (from requests<3,>=2.31->-r requirements.txt (line 3))
+  Downloading charset_normalizer-3.4.9-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (41 kB)
+Collecting idna<4,>=2.5 (from requests<3,>=2.31->-r requirements.txt (line 3))
+  Downloading idna-3.18-py3-none-any.whl.metadata (6.1 kB)
+Collecting urllib3<3,>=1.26 (from requests<3,>=2.31->-r requirements.txt (line 3))
+  Downloading urllib3-2.7.0-py3-none-any.whl.metadata (6.9 kB)
+Collecting certifi>=2023.5.7 (from requests<3,>=2.31->-r requirements.txt (line 3))
+  Downloading certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+Collecting build>=1.0.3 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading build-1.5.0-py3-none-any.whl.metadata (5.7 kB)
+Collecting pydantic>=2.0 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading pydantic-2.13.4-py3-none-any.whl.metadata (109 kB)
+Collecting pydantic-settings>=2.0 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading pydantic_settings-2.14.2-py3-none-any.whl.metadata (3.4 kB)
+Collecting pybase64>=1.4.1 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading pybase64-1.4.3-cp312-cp312-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl.metadata (8.7 kB)
+Collecting uvicorn>=0.18.3 (from uvicorn[standard]>=0.18.3->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading uvicorn-0.51.0-py3-none-any.whl.metadata (6.6 kB)
+Collecting numpy>=1.22.5 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading numpy-2.5.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)
+Collecting onnxruntime>=1.14.1 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading onnxruntime-1.28.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (5.5 kB)
+Collecting opentelemetry-api>=1.2.0 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading opentelemetry_api-1.44.0-py3-none-any.whl.metadata (1.4 kB)
+Collecting opentelemetry-exporter-otlp-proto-grpc>=1.2.0 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading opentelemetry_exporter_otlp_proto_grpc-1.44.0-py3-none-any.whl.metadata (2.6 kB)
+Collecting opentelemetry-sdk>=1.2.0 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading opentelemetry_sdk-1.44.0-py3-none-any.whl.metadata (1.6 kB)
+Collecting tokenizers>=0.13.2 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading tokenizers-0.23.1-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (9.8 kB)
+Collecting pypika>=0.48.9 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading pypika-0.51.1-py2.py3-none-any.whl.metadata (51 kB)
+Collecting tqdm>=4.65.0 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading tqdm-4.70.0-py3-none-any.whl.metadata (57 kB)
+Collecting overrides>=7.3.1 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading overrides-7.7.0-py3-none-any.whl.metadata (5.8 kB)
+Collecting importlib-resources (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading importlib_resources-7.1.0-py3-none-any.whl.metadata (4.0 kB)
+Collecting grpcio>=1.58.0 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading grpcio-1.83.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (3.7 kB)
+Collecting bcrypt>=4.0.1 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading bcrypt-5.0.0-cp39-abi3-manylinux_2_34_x86_64.whl.metadata (10 kB)
+Collecting typer>=0.9.0 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading typer-0.27.0-py3-none-any.whl.metadata (15 kB)
+Collecting kubernetes>=28.1.0 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading kubernetes-36.0.3-py2.py3-none-any.whl.metadata (1.8 kB)
+Collecting tenacity>=8.2.3 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading tenacity-9.1.4-py3-none-any.whl.metadata (1.2 kB)
+Collecting pyyaml>=6.0.0 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.4 kB)
+Collecting mmh3>=4.0.1 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading mmh3-5.2.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (14 kB)
+Collecting orjson>=3.9.12 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading orjson-3.11.9-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (41 kB)
+Collecting httpx>=0.27.0 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+Collecting rich>=10.11.0 (from chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading rich-15.0.0-py3-none-any.whl.metadata (18 kB)
+Collecting packaging>=24.0 (from build>=1.0.3->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading packaging-26.2-py3-none-any.whl.metadata (3.5 kB)
+Collecting pyproject_hooks (from build>=1.0.3->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading pyproject_hooks-1.2.0-py3-none-any.whl.metadata (1.3 kB)
+Collecting anyio (from httpx>=0.27.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading anyio-4.14.2-py3-none-any.whl.metadata (4.6 kB)
+Collecting httpcore==1.* (from httpx>=0.27.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+Collecting h11>=0.16 (from httpcore==1.*->httpx>=0.27.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+Collecting six>=1.9.0 (from kubernetes>=28.1.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+Collecting python-dateutil>=2.5.3 (from kubernetes>=28.1.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+Collecting websocket-client!=0.40.0,!=0.41.*,!=0.42.*,>=0.32.0 (from kubernetes>=28.1.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading websocket_client-1.9.0-py3-none-any.whl.metadata (8.3 kB)
+Collecting requests-oauthlib (from kubernetes>=28.1.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading requests_oauthlib-2.0.0-py2.py3-none-any.whl.metadata (11 kB)
+Collecting durationpy>=0.7 (from kubernetes>=28.1.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading durationpy-0.10-py3-none-any.whl.metadata (340 bytes)
+Collecting flatbuffers (from onnxruntime>=1.14.1->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading flatbuffers-25.12.19-py2.py3-none-any.whl.metadata (1.0 kB)
+Collecting protobuf>=4.25.8 (from onnxruntime>=1.14.1->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading protobuf-7.35.1-cp310-abi3-manylinux2014_x86_64.whl.metadata (595 bytes)
+Collecting googleapis-common-protos~=1.57 (from opentelemetry-exporter-otlp-proto-grpc>=1.2.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading googleapis_common_protos-1.75.0-py3-none-any.whl.metadata (8.6 kB)
+Collecting opentelemetry-exporter-otlp-proto-common==1.44.0 (from opentelemetry-exporter-otlp-proto-grpc>=1.2.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading opentelemetry_exporter_otlp_proto_common-1.44.0-py3-none-any.whl.metadata (1.8 kB)
+Collecting opentelemetry-proto==1.44.0 (from opentelemetry-exporter-otlp-proto-grpc>=1.2.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading opentelemetry_proto-1.44.0-py3-none-any.whl.metadata (2.3 kB)
+Collecting opentelemetry-semantic-conventions==0.65b0 (from opentelemetry-sdk>=1.2.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading opentelemetry_semantic_conventions-0.65b0-py3-none-any.whl.metadata (2.4 kB)
+Collecting annotated-types>=0.6.0 (from pydantic>=2.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+Collecting pydantic-core==2.46.4 (from pydantic>=2.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading pydantic_core-2.46.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.6 kB)
+Collecting typing-inspection>=0.4.2 (from pydantic>=2.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading typing_inspection-0.4.2-py3-none-any.whl.metadata (2.6 kB)
+Collecting markdown-it-py>=2.2.0 (from rich>=10.11.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading markdown_it_py-4.2.0-py3-none-any.whl.metadata (7.4 kB)
+Collecting pygments<3.0.0,>=2.13.0 (from rich>=10.11.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading pygments-2.20.0-py3-none-any.whl.metadata (2.5 kB)
+Collecting mdurl~=0.1 (from markdown-it-py>=2.2.0->rich>=10.11.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading mdurl-0.1.2-py3-none-any.whl.metadata (1.6 kB)
+Collecting huggingface-hub<2.0,>=0.16.4 (from tokenizers>=0.13.2->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading huggingface_hub-1.25.1-py3-none-any.whl.metadata (16 kB)
+Collecting click<9.0.0,>=8.4.2 (from huggingface-hub<2.0,>=0.16.4->tokenizers>=0.13.2->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Using cached click-8.4.2-py3-none-any.whl.metadata (2.6 kB)
+Collecting filelock>=3.10.0 (from huggingface-hub<2.0,>=0.16.4->tokenizers>=0.13.2->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading filelock-3.32.0-py3-none-any.whl.metadata (2.0 kB)
+Collecting fsspec>=2023.5.0 (from huggingface-hub<2.0,>=0.16.4->tokenizers>=0.13.2->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading fsspec-2026.6.0-py3-none-any.whl.metadata (10 kB)
+Collecting hf-xet<2.0.0,>=1.5.1 (from huggingface-hub<2.0,>=0.16.4->tokenizers>=0.13.2->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading hf_xet-1.5.2-cp38-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (4.9 kB)
+Collecting shellingham>=1.3.0 (from typer>=0.9.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading shellingham-1.5.4-py2.py3-none-any.whl.metadata (3.5 kB)
+Collecting annotated-doc>=0.0.2 (from typer>=0.9.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading annotated_doc-0.0.4-py3-none-any.whl.metadata (6.6 kB)
+Collecting httptools>=0.8.0 (from uvicorn[standard]>=0.18.3->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading httptools-0.8.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (3.5 kB)
+Collecting uvloop>=0.15.1 (from uvicorn[standard]>=0.18.3->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading uvloop-0.22.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (4.9 kB)
+Collecting watchfiles>=0.20 (from uvicorn[standard]>=0.18.3->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading watchfiles-1.2.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.9 kB)
+Collecting websockets>=13.0 (from uvicorn[standard]>=0.18.3->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading websockets-16.1.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (6.8 kB)
+Collecting oauthlib>=3.0.0 (from requests-oauthlib->kubernetes>=28.1.0->chromadb<2,>=1.0->-r requirements.txt (line 5))
+  Downloading oauthlib-3.3.1-py3-none-any.whl.metadata (7.9 kB)
+Downloading aiohttp-3.14.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (1.8 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.8/1.8 MB 17.3 MB/s  0:00:00
+Downloading jsonschema-4.26.0-py3-none-any.whl (90 kB)
+Downloading requests-2.34.2-py3-none-any.whl (73 kB)
+Downloading python_dotenv-1.2.2-py3-none-any.whl (22 kB)
+Downloading chromadb-1.5.9-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (23.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 23.3/23.3 MB 31.6 MB/s  0:00:00
+Downloading charset_normalizer-3.4.9-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (224 kB)
+Downloading idna-3.18-py3-none-any.whl (65 kB)
+Downloading multidict-6.7.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (256 kB)
+Downloading urllib3-2.7.0-py3-none-any.whl (131 kB)
+Downloading yarl-1.24.5-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (109 kB)
+Downloading aiohappyeyeballs-2.7.1-py3-none-any.whl (15 kB)
+Downloading aiosignal-1.4.0-py3-none-any.whl (7.5 kB)
+Downloading attrs-26.1.0-py3-none-any.whl (67 kB)
+Downloading bcrypt-5.0.0-cp39-abi3-manylinux_2_34_x86_64.whl (278 kB)
+Downloading build-1.5.0-py3-none-any.whl (26 kB)
+Downloading certifi-2026.7.22-py3-none-any.whl (136 kB)
+Downloading frozenlist-1.8.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (242 kB)
+Downloading grpcio-1.83.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (7.0 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.0/7.0 MB 30.6 MB/s  0:00:00
+Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Downloading httpx-0.28.1-py3-none-any.whl (73 kB)
+Downloading httpcore-1.0.9-py3-none-any.whl (78 kB)
+Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+Downloading jsonschema_specifications-2025.9.1-py3-none-any.whl (18 kB)
+Downloading kubernetes-36.0.3-py2.py3-none-any.whl (4.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.6/4.6 MB 29.5 MB/s  0:00:00
+Downloading durationpy-0.10-py3-none-any.whl (3.9 kB)
+Downloading mmh3-5.2.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (103 kB)
+Downloading numpy-2.5.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.7/16.7 MB 30.6 MB/s  0:00:00
+Downloading onnxruntime-1.28.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (19.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 19.2/19.2 MB 29.8 MB/s  0:00:00
+Downloading opentelemetry_api-1.44.0-py3-none-any.whl (60 kB)
+Downloading opentelemetry_exporter_otlp_proto_grpc-1.44.0-py3-none-any.whl (19 kB)
+Downloading opentelemetry_exporter_otlp_proto_common-1.44.0-py3-none-any.whl (17 kB)
+Downloading opentelemetry_proto-1.44.0-py3-none-any.whl (72 kB)
+Downloading googleapis_common_protos-1.75.0-py3-none-any.whl (300 kB)
+Downloading opentelemetry_sdk-1.44.0-py3-none-any.whl (137 kB)
+Downloading opentelemetry_semantic_conventions-0.65b0-py3-none-any.whl (204 kB)
+Downloading protobuf-7.35.1-cp310-abi3-manylinux2014_x86_64.whl (327 kB)
+Downloading orjson-3.11.9-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (134 kB)
+Downloading overrides-7.7.0-py3-none-any.whl (17 kB)
+Downloading packaging-26.2-py3-none-any.whl (100 kB)
+Downloading propcache-0.5.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (61 kB)
+Downloading pybase64-1.4.3-cp312-cp312-manylinux1_x86_64.manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_5_x86_64.whl (71 kB)
+Downloading pydantic-2.13.4-py3-none-any.whl (472 kB)
+Downloading pydantic_core-2.46.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 27.8 MB/s  0:00:00
+Downloading annotated_types-0.8.0-py3-none-any.whl (13 kB)
+Downloading pydantic_settings-2.14.2-py3-none-any.whl (61 kB)
+Downloading pypika-0.51.1-py2.py3-none-any.whl (60 kB)
+Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+Downloading pyyaml-6.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (807 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 807.9/807.9 kB 20.8 MB/s  0:00:00
+Downloading referencing-0.37.0-py3-none-any.whl (26 kB)
+Downloading rich-15.0.0-py3-none-any.whl (310 kB)
+Downloading pygments-2.20.0-py3-none-any.whl (1.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 23.4 MB/s  0:00:00
+Downloading markdown_it_py-4.2.0-py3-none-any.whl (91 kB)
+Downloading mdurl-0.1.2-py3-none-any.whl (10.0 kB)
+Downloading rpds_py-2026.6.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (366 kB)
+Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+Downloading tenacity-9.1.4-py3-none-any.whl (28 kB)
+Downloading tokenizers-0.23.1-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.3/3.3 MB 24.7 MB/s  0:00:00
+Downloading huggingface_hub-1.25.1-py3-none-any.whl (774 kB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 774.9/774.9 kB 27.9 MB/s  0:00:00
+Using cached click-8.4.2-py3-none-any.whl (119 kB)
+Downloading hf_xet-1.5.2-cp38-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (4.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.4/4.4 MB 25.5 MB/s  0:00:00
+Downloading filelock-3.32.0-py3-none-any.whl (97 kB)
+Downloading fsspec-2026.6.0-py3-none-any.whl (203 kB)
+Downloading tqdm-4.70.0-py3-none-any.whl (80 kB)
+Downloading typer-0.27.0-py3-none-any.whl (122 kB)
+Downloading annotated_doc-0.0.4-py3-none-any.whl (5.3 kB)
+Downloading shellingham-1.5.4-py2.py3-none-any.whl (9.8 kB)
+Downloading typing_inspection-0.4.2-py3-none-any.whl (14 kB)
+Downloading uvicorn-0.51.0-py3-none-any.whl (73 kB)
+Downloading httptools-0.8.0-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (523 kB)
+Downloading uvloop-0.22.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (4.4 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.4/4.4 MB 19.7 MB/s  0:00:00
+Downloading watchfiles-1.2.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (456 kB)
+Downloading anyio-4.14.2-py3-none-any.whl (125 kB)
+Downloading websocket_client-1.9.0-py3-none-any.whl (82 kB)
+Downloading websockets-16.1.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (187 kB)
+Downloading flatbuffers-25.12.19-py2.py3-none-any.whl (26 kB)
+Downloading importlib_resources-7.1.0-py3-none-any.whl (37 kB)
+Downloading pyproject_hooks-1.2.0-py3-none-any.whl (10 kB)
+Downloading requests_oauthlib-2.0.0-py2.py3-none-any.whl (24 kB)
+Downloading oauthlib-3.3.1-py3-none-any.whl (160 kB)
+Installing collected packages: pypika, flatbuffers, durationpy, websockets, websocket-client, uvloop, urllib3, typing_extensions, tqdm, tenacity, six, shellingham, rpds-py, pyyaml, python-dotenv, pyproject_hooks, pygments, pybase64, protobuf, propcache, packaging, overrides, orjson, oauthlib, numpy, multidict, mmh3, mdurl, importlib-resources, idna, httptools, hf-xet, h11, fsspec, frozenlist, filelock, click, charset_normalizer, certifi, bcrypt, attrs, annotated-types, annotated-doc, aiohappyeyeballs, yarl, uvicorn, typing-inspection, requests, referencing, python-dateutil, pydantic-core, opentelemetry-proto, opentelemetry-api, onnxruntime, markdown-it-py, httpcore, grpcio, googleapis-common-protos, build, anyio, aiosignal, watchfiles, rich, requests-oauthlib, pydantic, opentelemetry-semantic-conventions, opentelemetry-exporter-otlp-proto-common, jsonschema-specifications, httpx, aiohttp, typer, pydantic-settings, opentelemetry-sdk, kubernetes, jsonschema, huggingface-hub, tokenizers, opentelemetry-exporter-otlp-proto-grpc, chromadb
+
+Successfully installed aiohappyeyeballs-2.7.1 aiohttp-3.14.3 aiosignal-1.4.0 annotated-doc-0.0.4 annotated-types-0.8.0 anyio-4.14.2 attrs-26.1.0 bcrypt-5.0.0 build-1.5.0 certifi-2026.7.22 charset_normalizer-3.4.9 chromadb-1.5.9 click-8.4.2 durationpy-0.10 filelock-3.32.0 flatbuffers-25.12.19 frozenlist-1.8.0 fsspec-2026.6.0 googleapis-common-protos-1.75.0 grpcio-1.83.0 h11-0.16.0 hf-xet-1.5.2 httpcore-1.0.9 httptools-0.8.0 httpx-0.28.1 huggingface-hub-1.25.1 idna-3.18 importlib-resources-7.1.0 jsonschema-4.26.0 jsonschema-specifications-2025.9.1 kubernetes-36.0.3 markdown-it-py-4.2.0 mdurl-0.1.2 mmh3-5.2.1 multidict-6.7.1 numpy-2.5.1 oauthlib-3.3.1 onnxruntime-1.28.0 opentelemetry-api-1.44.0 opentelemetry-exporter-otlp-proto-common-1.44.0 opentelemetry-exporter-otlp-proto-grpc-1.44.0 opentelemetry-proto-1.44.0 opentelemetry-sdk-1.44.0 opentelemetry-semantic-conventions-0.65b0 orjson-3.11.9 overrides-7.7.0 packaging-26.2 propcache-0.5.2 protobuf-7.35.1 pybase64-1.4.3 pydantic-2.13.4 pydantic-core-2.46.4 pydantic-settings-2.14.2 pygments-2.20.0 pypika-0.51.1 pyproject_hooks-1.2.0 python-dateutil-2.9.0.post0 python-dotenv-1.2.2 pyyaml-6.0.3 referencing-0.37.0 requests-2.34.2 requests-oauthlib-2.0.0 rich-15.0.0 rpds-py-2026.6.3 shellingham-1.5.4 six-1.17.0 tenacity-9.1.4 tokenizers-0.23.1 tqdm-4.70.0 typer-0.27.0 typing-inspection-0.4.2 typing_extensions-4.16.0 urllib3-2.7.0 uvicorn-0.51.0 uvloop-0.22.1 watchfiles-1.2.0 websocket-client-1.9.0 websockets-16.1.1 yarl-1.24.5
+exit=0
+
+=== STEP 3c: pip check (no broken deps) ===
+No broken requirements found.
+pip check exit=0
+
+=== STEP 3d: pip freeze (top of file) ===
+aiohappyeyeballs==2.7.1
+aiohttp==3.14.3
+aiosignal==1.4.0
+annotated-doc==0.0.4
+annotated-types==0.8.0
+anyio==4.14.2
+attrs==26.1.0
+bcrypt==5.0.0
+build==1.5.0
+certifi==2026.7.22
+charset-normalizer==3.4.9
+chromadb==1.5.9
+click==8.4.2
+durationpy==0.10
+filelock==3.32.0
+flatbuffers==25.12.19
+frozenlist==1.8.0
+fsspec==2026.6.0
+googleapis-common-protos==1.75.0
+grpcio==1.83.0
+h11==0.16.0
+hf-xet==1.5.2
+httpcore==1.0.9
+httptools==0.8.0
+httpx==0.28.1
+huggingface_hub==1.25.1
+idna==3.18
+importlib_resources==7.1.0
+jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
+kubernetes==36.0.3
+markdown-it-py==4.2.0
+mdurl==0.1.2
+mmh3==5.2.1
+multidict==6.7.1
+numpy==2.5.1
+oauthlib==3.3.1
+onnxruntime==1.28.0
+opentelemetry-api==1.44.0
+opentelemetry-exporter-otlp-proto-common==1.44.0
+
+=== STEP 4: ACCEPTANCE COMMAND (imports all 5 deps, prints chromadb version) ===
+chromadb 1.5.9
+acceptance exit=0
+
+=== STEP 4a: FAILURE-QA: pin count check ===
+grep -cE '^(aiohttp|jsonschema|requests|python-dotenv|chromadb)[><=]' requirements.txt
+5
+
+=== STEP 4b: FAILURE-QA: pip check ===
+No broken requirements found.
+pip check exit=0
+
+=== STEP 4c: Resolved versions of the 5 pinned packages ===
+Name: aiohttp Version: 3.14.3
+Name: jsonschema Version: 4.26.0
+Name: requests Version: 2.34.2
+Name: python-dotenv Version: 1.2.2
+Name: chromadb Version: 1.5.9
+
+=== STEP 4d: .venv/ size summary ===
+426M	.venv
+pyc files: 5244
+
+=== STEP 5: git commit ===
+[dev 7a96d38] Add project venv and pinned requirements.txt
+ 1 file changed, 5 insertions(+)
+ create mode 100644 requirements.txt
+git commit exit=0
+
+=== Commit details ===
+commit 7a96d38db35888ea2cf040f1e666ceeebec0bed1
+Author:     Sisyphus <clio-agent@sisyphuslabs.ai>
+AuthorDate: Tue Jul 28 05:11:12 2026 +0200
+Commit:     Sisyphus <clio-agent@sisyphuslabs.ai>
+CommitDate: Tue Jul 28 05:11:12 2026 +0200
+
+    Add project venv and pinned requirements.txt
+    
+    Ultraworked with [Sisyphus](https://github.com/code-yeongyu/oh-my-openagent)
+    
+    Co-authored-by: Sisyphus <clio-agent@sisyphuslabs.ai>
+
+=== Show commit hash ===
+HEAD=7a96d38db35888ea2cf040f1e666ceeebec0bed1
+short=7a96d38
+
+=== Files changed in this commit ===
+ requirements.txt | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+=== git status --porcelain AFTER commit (should NOT show 'A  requirements.txt' or '?? requirements.txt') ===
+ M .gitignore
+ M README.md
+?? .omo/
+?? .opencode/
+?? opencode.json
+
+=== FINAL VERIFICATION (post-commit) ===
+
+--- Acceptance: import all 5 deps ---
+chromadb 1.5.9
+exit=0
+
+--- Failure-QA: pin count check ---
+5
+
+--- Failure-QA: pip check ---
+No broken requirements found.
+exit=0
+
+--- Files in repo (top-level) ---
+drwxrwxr-x .
+drwxrwxr-x ..
+-rw-rw-r-- .env
+drwxrwxr-x .git
+-rw-rw-r-- .gitignore
+drwxrwxr-x .omo
+drwxrwxr-x .opencode
+drwxrwxr-x .venv
+-rw-rw-r-- AGENTS.md
+-rw-rw-r-- CLA.md
+-rw-rw-r-- LICENSE.md
+-rw-rw-r-- LLM_FRAMEWORK.md
+-rw-rw-r-- README.md
+drwxr-xr-x architecture
+drwxrwxr-x data
+drwxrwxr-x notes
+-rw-rw-r-- opencode.json
+-rw-rw-r-- requirements.txt
+drwxrwxr-x scripts
+drwxrwxr-x src
+drwxrwxr-x tests
+-rw-rw-r-- todo-deferred.md
+-rw-rw-r-- todo-next.md
+-rw-rw-r-- todo.md
+
+--- Evidence file present ---
+-rw-rw-r-- 1 joshua joshua 32177 Jul 28 05:11 .omo/evidence/task-1-hyde-retrieval-pipeline.txt
+size: 32272 bytes
+lines: 511
+
+--- Commit verification ---
+HEAD: 7a96d38db35888ea2cf040f1e666ceeebec0bed1
+Branch: dev
+Subject: Add project venv and pinned requirements.txt
+Changed files in commit: requirements.txt
+
+--- Working tree state (user's dirty work preserved) ---
+ M .gitignore
+ M README.md
+?? .omo/
+?? .opencode/
+?? opencode.json
+
+--- Confirm requirements.txt IS the only file in the commit ---
+ requirements.txt | 5 +++++
+ 1 file changed, 5 insertions(+)

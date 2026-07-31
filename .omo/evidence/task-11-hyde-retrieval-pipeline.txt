@@ -1,0 +1,199 @@
+Task 11 — Add HyDE generation schema, prompt, and ref row
+Evidence captured at 2026-07-28T17:00:00Z
+
+---
+Command: .venv/bin/python -m py_compile src/config/schemas.py src/config/prompts.py src/config/__init__.py scripts/migrate_pipeline_message_types.py scripts/test_hyde_schema.py
+Exit code: 0
+Output: (none)
+
+---
+Command: .venv/bin/python scripts/test_hyde_schema.py
+Exit code: 0
+Output:
+test_missing_document_fails (__main__.TestHydeGenerationSchema.test_missing_document_fails)
+A response missing hyde_document is rejected. ... ok
+test_prompt_formats_with_intent_json (__main__.TestHydeGenerationSchema.test_prompt_formats_with_intent_json)
+The prompt template accepts a JSON intent string containing braces. ... ok
+test_short_document_fails_min_length (__main__.TestHydeGenerationSchema.test_short_document_fails_min_length)
+A hyde_document under 50 characters is rejected. ... ok
+test_valid_document_passes (__main__.TestHydeGenerationSchema.test_valid_document_passes)
+A hyde_document over 50 characters validates. ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.002s
+
+OK
+Testing HyDE generation schema and prompt...
+==================================================
+
+==================================================
+Tests run: 4
+Failures: 0
+Errors: 0
+==================================================
+
+---
+Command: .venv/bin/python scripts/migrate_pipeline_message_types.py --db-path data/chat_database.db
+Exit code: 0
+Output:
+Backup written: data/chat_database.db.pre-pipeline.bak
+ref_message_types after migration:
+  corpus_ingest: is_active=1
+  embedding_generation: is_active=1
+  error: is_active=1
+  human_input: is_active=1
+  hyde_generation: is_active=1
+  intent_classification: is_active=1
+  intent_disambiguation: is_active=0
+  intent_generation: is_active=1
+  llm_response: is_active=1
+Total rows: 9
+
+---
+Command: sqlite3 data/chat_database.db "SELECT slug, temperature, is_active FROM ref_message_types WHERE slug='hyde_generation'"
+Exit code: 0
+Output:
+hyde_generation|0.7|1
+
+---
+Command: .venv/bin/python scripts/test_migration.py
+Exit code: 0
+Output:
+test_backup_written (__main__.TestPipelineMessageTypeMigration.test_backup_written)
+The pre-pipeline backup must exist next to the migrated copy. ... ok
+test_fk_insert_bogus_slug_raises (__main__.TestPipelineMessageTypeMigration.test_fk_insert_bogus_slug_raises)
+ChatDatabase (PRAGMA foreign_keys = ON) must reject unknown slugs. ... ok
+test_hyde_generation_row_values (__main__.TestPipelineMessageTypeMigration.test_hyde_generation_row_values)
+The hyde_generation row carries the HyDE schema/prompt. ... ok
+test_insert_human_input_succeeds (__main__.TestPipelineMessageTypeMigration.test_insert_human_input_succeeds)
+A message with the newly seeded human_input slug must insert. ... ok
+test_intent_generation_row_values (__main__.TestPipelineMessageTypeMigration.test_intent_generation_row_values)
+The intent_generation row carries the refined schema/prompt. ... ok
+test_new_row_field_values (__main__.TestPipelineMessageTypeMigration.test_new_row_field_values)
+Spot-check the seeded rows carry the specified field values. ... ok
+test_ref_rows_present_with_expected_flags (__main__.TestPipelineMessageTypeMigration.test_ref_rows_present_with_expected_flags)
+6 new rows active, intent_classification stays 1, disambiguation 0. ... ok
+test_second_run_idempotent (__main__.TestPipelineMessageTypeMigration.test_second_run_idempotent)
+A second migration run must leave rows and counts unchanged. ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.374s
+
+OK
+Testing pipeline message-type migration (on a temp COPY)...
+==================================================
+Backup written: /tmp/tmp4veskdgd/copy.db.pre-pipeline.bak
+ref_message_types after migration:
+  corpus_ingest: is_active=1
+  embedding_generation: is_active=1
+  error: is_active=1
+  human_input: is_active=1
+  hyde_generation: is_active=1
+  intent_classification: is_active=1
+  intent_disambiguation: is_active=0
+  intent_generation: is_active=1
+  llm_response: is_active=1
+Total rows: 9
+Backup written: /tmp/tmptzw04q1m/copy.db.pre-pipeline.bak
+ref_message_types after migration:
+  corpus_ingest: is_active=1
+  embedding_generation: is_active=1
+  error: is_active=1
+  human_input: is_active=1
+  hyde_generation: is_active=1
+  intent_classification: is_active=1
+  intent_disambiguation: is_active=0
+  intent_generation: is_active=1
+  llm_response: is_active=1
+Total rows: 9
+Backup written: /tmp/tmpaqn2iy5y/copy.db.pre-pipeline.bak
+ref_message_types after migration:
+  corpus_ingest: is_active=1
+  embedding_generation: is_active=1
+  error: is_active=1
+  human_input: is_active=1
+  hyde_generation: is_active=1
+  intent_classification: is_active=1
+  intent_disambiguation: is_active=0
+  intent_generation: is_active=1
+  llm_response: is_active=1
+Total rows: 9
+Backup written: /tmp/tmp_nd1kd3u/copy.db.pre-pipeline.bak
+ref_message_types after migration:
+  corpus_ingest: is_active=1
+  embedding_generation: is_active=1
+  error: is_active=1
+  human_input: is_active=1
+  hyde_generation: is_active=1
+  intent_classification: is_active=1
+  intent_disambiguation: is_active=0
+  intent_generation: is_active=1
+  llm_response: is_active=1
+Total rows: 9
+Backup written: /tmp/tmpg_xw1jtk/copy.db.pre-pipeline.bak
+ref_message_types after migration:
+  corpus_ingest: is_active=1
+  embedding_generation: is_active=1
+  error: is_active=1
+  human_input: is_active=1
+  hyde_generation: is_active=1
+  intent_classification: is_active=1
+  intent_disambiguation: is_active=0
+  intent_generation: is_active=1
+  llm_response: is_active=1
+Total rows: 9
+Backup written: /tmp/tmpm8jiw99k/copy.db.pre-pipeline.bak
+ref_message_types after migration:
+  corpus_ingest: is_active=1
+  embedding_generation: is_active=1
+  error: is_active=1
+  human_input: is_active=1
+  hyde_generation: is_active=1
+  intent_classification: is_active=1
+  intent_disambiguation: is_active=0
+  intent_generation: is_active=1
+  llm_response: is_active=1
+Total rows: 9
+Backup written: /tmp/tmpbn50d0tm/copy.db.pre-pipeline.bak
+ref_message_types after migration:
+  corpus_ingest: is_active=1
+  embedding_generation: is_active=1
+  error: is_active=1
+  human_input: is_active=1
+  hyde_generation: is_active=1
+  intent_classification: is_active=1
+  intent_disambiguation: is_active=0
+  intent_generation: is_active=1
+  llm_response: is_active=1
+Total rows: 9
+Backup written: /tmp/tmpspcjyy3f/copy.db.pre-pipeline.bak
+ref_message_types after migration:
+  corpus_ingest: is_active=1
+  embedding_generation: is_active=1
+  error: is_active=1
+  human_input: is_active=1
+  hyde_generation: is_active=1
+  intent_classification: is_active=1
+  intent_disambiguation: is_active=0
+  intent_generation: is_active=1
+  llm_response: is_active=1
+Total rows: 9
+Backup written: /tmp/tmpspcjyy3f/copy.db.pre-pipeline.bak
+ref_message_types after migration:
+  corpus_ingest: is_active=1
+  embedding_generation: is_active=1
+  error: is_active=1
+  human_input: is_active=1
+  hyde_generation: is_active=1
+  intent_classification: is_active=1
+  intent_disambiguation: is_active=0
+  intent_generation: is_active=1
+  llm_response: is_active=1
+Total rows: 9
+
+==================================================
+Tests run: 8
+Failures: 0
+Errors: 0
+==================================================
+End of evidence

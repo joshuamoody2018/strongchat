@@ -1,2 +1,41 @@
-.env
-data/*
+# Private notes and configuration
+notes/
+
+# Personal configuration files
+*.env
+*.local
+config.local.json
+
+# Temporary files
+*.tmp
+*.temp
+
+# Development artifacts
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Logs
+*.log
+logs/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3

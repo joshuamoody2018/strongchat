@@ -104,7 +104,7 @@ sudo apt install python3-aiohttp python3-jsonschema
 
 # Environment variables
 export OPENROUTER_API_KEY=your_api_key_here
-export MODEL_SLUG_INTENTS=openai/gpt-3.5-turbo
+export MODEL_SLUG_INTENTS=mistralai/mistral-small-24b-instruct-2501
 ```
 
 ### Key Files

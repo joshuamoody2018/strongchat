@@ -78,7 +78,7 @@ class TestDatabaseQueries(unittest.TestCase):
                     'HyDE Generation',
                     'llm',
                     json.dumps({'type': 'object'}),
-                    'openai/gpt-3.5-turbo',
+                    'meta-llama/llama-3.1-8b-instruct',
                     'Generate a hypothetical answer passage',
                     'Imagine a passage that answers: {query}',
                 ),
@@ -120,7 +120,7 @@ class TestDatabaseQueries(unittest.TestCase):
         )
         # Sanity: existing keys still present
         self.assertEqual(cfg['step_name'], 'HyDE Generation')
-        self.assertEqual(cfg['model_slug'], 'openai/gpt-3.5-turbo')
+        self.assertEqual(cfg['model_slug'], 'meta-llama/llama-3.1-8b-instruct')
 
     def test_get_messages_by_session_and_type_joins_step_name(self):
         """The session+type query must also return step_name via the JOIN."""

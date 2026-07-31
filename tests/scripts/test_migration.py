@@ -27,11 +27,9 @@ EXPECTED_ACTIVE = {
     'error',
     'human_input',
     'hyde_generation',
-    'intent_classification',
     'intent_generation',
     'llm_response',
 }
-EXPECTED_INACTIVE = {'intent_disambiguation'}
 
 
 class TestPipelineMessageTypeMigration(unittest.TestCase):
@@ -72,13 +70,13 @@ class TestPipelineMessageTypeMigration(unittest.TestCase):
         )
 
     def test_ref_rows_present_with_expected_flags(self):
-        """6 new rows active, intent_classification stays 1, disambiguation 0."""
+        """All expected rows are active; intent_disambiguation is gone."""
         flags = self._flags()
         for slug in EXPECTED_ACTIVE:
             self.assertEqual(flags.get(slug), 1, f"{slug} should be active")
-        for slug in EXPECTED_INACTIVE:
-            self.assertEqual(flags.get(slug), 0, f"{slug} should be inactive")
-        self.assertEqual(len(flags), 9)
+        self.assertNotIn('intent_disambiguation', flags)
+        self.assertNotIn('intent_classification', flags)
+        self.assertEqual(len(flags), 7)
 
     def test_new_row_field_values(self):
         """Spot-check the seeded rows carry the specified field values."""
@@ -125,11 +123,11 @@ class TestPipelineMessageTypeMigration(unittest.TestCase):
             )
         self.assertEqual(row['step_name'], 'Intent Generation')
         self.assertEqual(row['creator_type'], 'programmatic')
-        self.assertEqual(row['model_slug'], 'openai/gpt-4.1-mini')
+        self.assertEqual(row['model_slug'], migration.MODEL_INTENT_GENERATION)
         self.assertEqual(row['temperature'], 0.2)
         self.assertEqual(row['max_retries'], 3)
         self.assertEqual(row['is_active'], 1)
-        self.assertEqual(row['additional_model_settings'], '{"max_tokens": 800}')
+        self.assertEqual(row['additional_model_settings'], '{"max_tokens": 1200}')
         self.assertIsNotNone(row['prompt_template'])
         self.assertIn('{query}', row['prompt_template'])
         self.assertIsNotNone(row['request_schema'])
@@ -147,11 +145,11 @@ class TestPipelineMessageTypeMigration(unittest.TestCase):
             )
         self.assertEqual(row['step_name'], 'HyDE Generation')
         self.assertEqual(row['creator_type'], 'programmatic')
-        self.assertEqual(row['model_slug'], 'openai/gpt-4.1-mini')
+        self.assertEqual(row['model_slug'], migration.MODEL_HYDE_GENERATION)
         self.assertEqual(row['temperature'], 0.7)
         self.assertEqual(row['max_retries'], 3)
         self.assertEqual(row['is_active'], 1)
-        self.assertEqual(row['additional_model_settings'], '{"max_tokens": 400}')
+        self.assertEqual(row['additional_model_settings'], '{"max_tokens": 800}')
         self.assertIsNotNone(row['prompt_template'])
         self.assertIn('{query}', row['prompt_template'])
         self.assertIsNotNone(row['request_schema'])

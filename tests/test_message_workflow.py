@@ -15,10 +15,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 from services.sqlite.database import ChatDatabase
 from services.llm.wrapper import LLMWrapper
 from services.llm.aimessage import AIMessage
+from services.llm.exceptions import APIConnectionError
 
-# Import the database creation script
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 import create_new_database
+import populate_message_types
 
 
 class TestMessageWorkflow(unittest.TestCase):
@@ -27,19 +28,13 @@ class TestMessageWorkflow(unittest.TestCase):
     def setUp(self):
         """Set up test database and mock data"""
         self.test_db = tempfile.mktemp(suffix='.db')
-        
-        # Create the database schema
+
         create_new_database.create_new_database(self.test_db)
-        
+        populate_message_types.populate_message_types(self.test_db)
+
         self.db = ChatDatabase(self.test_db)
-        
-        # Create test session
         self.session_uuid = self.db.create_session("Test Session", "test")
-        
-        # Get the message type that was created
         self.mock_message_type = self.db.get_message_type("intent_classification")
-        
-        # The message_type is already created by create_new_database
     
     def tearDown(self):
         """Clean up test database"""
@@ -59,8 +54,7 @@ class TestMessageWorkflow(unittest.TestCase):
             mock_api.return_value = mock_response
             
             # Call API
-            loop = asyncio.get_event_loop()
-            result = loop.run_until_complete(
+            result = asyncio.run(
                 wrapper.call_api("intent_classification", "What is love?", self.session_uuid)
             )
             
@@ -86,8 +80,8 @@ class TestMessageWorkflow(unittest.TestCase):
         
         # Mock API that fails twice then succeeds
         mock_responses = [
-            Exception("API timeout"),  # First attempt fails
-            Exception("Connection error"),  # Second attempt fails
+            APIConnectionError("API timeout"),  # First attempt fails
+            APIConnectionError("Connection error"),  # Second attempt fails
             '{"intent": "question", "confidence": 0.95}'  # Third attempt succeeds
         ]
         
@@ -107,8 +101,7 @@ class TestMessageWorkflow(unittest.TestCase):
             mock_api.side_effect = mock_api_call
             
             # Call API
-            loop = asyncio.get_event_loop()
-            result = loop.run_until_complete(
+            result = asyncio.run(
                 wrapper.call_api("intent_classification", "What is love?", self.session_uuid)
             )
             
@@ -130,7 +123,7 @@ class TestMessageWorkflow(unittest.TestCase):
         
         # Mock API that always fails
         async def mock_api_call(*args, **kwargs):
-            raise Exception("Persistent API error")
+            raise APIConnectionError("Persistent API error")
         
         with patch.object(wrapper, '_call_api_async', new_callable=AsyncMock) as mock_api:
             mock_api.side_effect = mock_api_call
@@ -163,8 +156,7 @@ class TestMessageWorkflow(unittest.TestCase):
             mock_api.return_value = mock_response
             
             # Call API
-            loop = asyncio.get_event_loop()
-            result = loop.run_until_complete(
+            result = asyncio.run(
                 wrapper.call_api("intent_classification", "What is love?", self.session_uuid)
             )
             
@@ -189,8 +181,7 @@ class TestMessageWorkflow(unittest.TestCase):
             mock_api.return_value = mock_response
             
             # Call API - should handle gracefully
-            loop = asyncio.get_event_loop()
-            result = loop.run_until_complete(
+            result = asyncio.run(
                 wrapper.call_api("intent_classification", "What is love?", self.session_uuid)
             )
             
@@ -216,23 +207,22 @@ class TestMessageWorkflow(unittest.TestCase):
     
     def test_multiple_message_types_workflow(self):
         """Test workflow with multiple message types"""
-        # Insert another message type
         second_message_type = {
-            "slug": "intent_disambiguation",
-            "step_name": "Intent Disambiguation",
+            "slug": "hyde_generation",
+            "step_name": "HyDE Generation",
             "creator_type": "programmatic",
-            "request_schema": '{"type": "object", "properties": {"recommended_framing": {"type": "string"}}, "required": ["recommended_framing"]}',
-            "model_slug": "openai/gpt-3.5-turbo",
-            "temperature": 0.2,
-            "additional_model_settings": '{"max_tokens": 500}',
+            "request_schema": '{"type": "object", "properties": {"hyde_document": {"type": "string"}}, "required": ["hyde_document"]}',
+            "model_slug": "meta-llama/llama-3.3-70b-instruct",
+            "temperature": 0.7,
+            "additional_model_settings": '{"max_tokens": 800}',
             "max_retries": 3,
             "is_active": True,
-            "description": "Test intent disambiguation"
+            "description": "Test HyDE generation"
         }
-        
+
         self.db.cursor.execute('''
-            INSERT INTO message_types 
-            (slug, step_name, creator_type, request_schema, model_slug, temperature, 
+            INSERT INTO ref_message_types
+            (slug, step_name, creator_type, request_schema, model_slug, temperature,
              additional_model_settings, max_retries, is_active, description)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
@@ -248,40 +238,33 @@ class TestMessageWorkflow(unittest.TestCase):
             second_message_type["description"]
         ))
         self.db.conn.commit()
-        
+
         wrapper = LLMWrapper(self.test_db)
-        
-        # Mock API response for disambiguation
-        mock_response = '{"recommended_framing": "framing_1"}'
-        
+
+        mock_response = '{"hyde_document": "A long enough hypothetical passage about love."}'
+
         with patch.object(wrapper, '_call_api_async', new_callable=AsyncMock) as mock_api:
             mock_api.return_value = mock_response
-            
-            # Call API with different message types
+
             loop = asyncio.get_event_loop()
-            
-            # First call with intent_classification
+
             result1 = loop.run_until_complete(
                 wrapper.call_api("intent_classification", "What is love?", self.session_uuid)
             )
-            
-            # Second call with intent_disambiguation
+
             result2 = loop.run_until_complete(
-                wrapper.call_api("intent_disambiguation", "What is love?", self.session_uuid)
+                wrapper.call_api("hyde_generation", "What is love?", self.session_uuid)
             )
-            
-            # Verify both calls succeeded
+
             self.assertTrue(result1.is_successful())
             self.assertTrue(result2.is_successful())
-            
-            # Verify different message types were used
+
             self.assertEqual(result1.message_type_slug, "intent_classification")
-            self.assertEqual(result2.message_type_slug, "intent_disambiguation")
-            
-            # Verify both messages were saved
+            self.assertEqual(result2.message_type_slug, "hyde_generation")
+
             messages = self.db.get_messages_by_session_and_type(self.session_uuid)
             self.assertEqual(len(messages), 2)
-            
+
         wrapper.close()
 
 

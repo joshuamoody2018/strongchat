@@ -82,12 +82,21 @@ Functions:
 {
   "query_analysis": {
     "original_query": "why do bad things happen",
-    "ambiguous_elements": ["bad things"],
-    "core_question": "Why does suffering occur?",
+    "core_questions": ["Why does suffering occur?"],
     "context_clues": ["suffering", "pain"]
   },
-  "interpretive_framings": [...],
-  "recommended_framing": "framing1"
+  "intents": [
+    {
+      "intent_id": "theodicy",
+      "interpretation": "Understanding the problem of evil",
+      "keywords_explicit": ["bad", "things", "happen"],
+      "keywords_inferred": ["suffering", "evil", "pain"],
+      "themes": ["theodicy", "suffering"],
+      "confidence": 0.9,
+      "is_primary": true
+    }
+  ],
+  "recommended_search_approach": "Prioritize the primary intent"
 }
 ```
 

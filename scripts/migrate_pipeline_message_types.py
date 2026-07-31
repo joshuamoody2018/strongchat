@@ -4,10 +4,10 @@
 Steps:
   0. Back up the database to <db_path>.pre-pipeline.bak via sqlite3's backup API
      (an existing backup is overwritten).
-  1. INSERT OR REPLACE the 5 pipeline message-type rows
+  1. DELETE the superseded intent_disambiguation and intent_classification rows
+  2. INSERT OR REPLACE the 5 pipeline message-type rows
      (human_input, llm_response, error, embedding_generation, corpus_ingest).
-  2. Deactivate intent_disambiguation (superseded; zero callers).
-     intent_classification is NOT touched (main.py depends on it).
+  3. Upsert intent_generation and hyde_generation using cheap open-weight models.
 
 Idempotent: safe to run multiple times against the same database.
 """
@@ -21,6 +21,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 import config
 
 BACKUP_SUFFIX = '.pre-pipeline.bak'
+
+MODEL_INTENT_GENERATION = 'meta-llama/llama-3.3-70b-instruct'
+MODEL_HYDE_GENERATION = 'mistralai/mistral-small-24b-instruct-2501'
 
 # (slug, step_name, creator_type, request_schema, model_slug, temperature, description)
 PIPELINE_MESSAGE_TYPES = [
@@ -78,8 +81,8 @@ INSERT OR REPLACE INTO ref_message_types
 VALUES (?, ?, ?, ?, ?, ?, '{}', 3, 1, ?, NULL)
 """
 
-DEACTIVATE_SQL = (
-    "UPDATE ref_message_types SET is_active=0 WHERE slug='intent_disambiguation'"
+DELETE_SQL = (
+    "DELETE FROM ref_message_types WHERE slug IN ('intent_disambiguation', 'intent_classification')"
 )
 
 INTENT_GENERATION_SQL = """
@@ -94,9 +97,9 @@ INTENT_GENERATION_ROW = (
     'Intent Generation',
     'programmatic',
     json.dumps(config.INTENT_GENERATION_SCHEMA),
-    'openai/gpt-4.1-mini',
+    MODEL_INTENT_GENERATION,
     0.2,
-    '{"max_tokens": 800}',
+    '{"max_tokens": 1200}',
     3,
     1,
     'Refined multi-intent generation for a user query',
@@ -108,9 +111,9 @@ HYDE_GENERATION_ROW = (
     'HyDE Generation',
     'programmatic',
     json.dumps(config.HYDE_GENERATION_SCHEMA),
-    'openai/gpt-4.1-mini',
+    MODEL_HYDE_GENERATION,
     0.7,
-    '{"max_tokens": 400}',
+    '{"max_tokens": 800}',
     3,
     1,
     'Hypothetical biblical passage generated from a single intent',
@@ -134,16 +137,16 @@ def backup_database(db_path: str) -> str:
 
 
 def migrate(db_path: str) -> str:
-    """Back up db_path, seed pipeline message types, deactivate intent_disambiguation."""
+    """Back up db_path, seed pipeline message types, drop intent_disambiguation."""
     backup_path = backup_database(db_path)
     print(f"Backup written: {backup_path}")
 
     conn = sqlite3.connect(db_path)
     try:
+        conn.execute(DELETE_SQL)
         conn.executemany(INSERT_SQL, PIPELINE_MESSAGE_TYPES)
         conn.execute(INTENT_GENERATION_SQL, INTENT_GENERATION_ROW)
         conn.execute(INTENT_GENERATION_SQL, HYDE_GENERATION_ROW)
-        conn.execute(DEACTIVATE_SQL)
         conn.commit()
 
         rows = conn.execute(

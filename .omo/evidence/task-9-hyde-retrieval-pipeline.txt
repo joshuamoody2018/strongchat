@@ -1,0 +1,24 @@
+Task: 9 — Add IntentService with offline unit test
+Date: 2026-07-28T13:55:20Z
+
+Command: env -u OPENROUTER_API_KEY .venv/bin/python scripts/test_intent_service.py
+
+test_generate_intents_invalid_response_raises_value_error (__main__.TestIntentService.test_generate_intents_invalid_response_raises_value_error)
+A response missing the required themes field raises ValueError. ... ok
+test_generate_intents_returns_structured_result (__main__.TestIntentService.test_generate_intents_returns_structured_result)
+A valid response is parsed and returned with the expected keys. ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.013s
+
+OK
+Testing IntentService offline...
+==================================================
+
+==================================================
+Tests run: 2
+Failures: 0
+Errors: 0
+==================================================
+
+Exit code: 0
