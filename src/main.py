@@ -157,18 +157,10 @@ async def main():
                 
                 except Exception as e:
                     print(f"Error: {e}")
-                    # Store error in database and session
-                    error_message = AIMessage(
-                        session_uuid=current_session.uuid,
-                        message_type_slug="error",
-                        unique_prompt=user_input
-                    )
-                    error_message.mark_failure(str(e))
-                    current_session.add_message(error_message)
-                    
+                    # Store error in database using error_text field
                     db.create_message_with_type(
                         session_uuid=current_session.uuid,
-                        message_type_slug="error",
+                        message_type_slug="human_input",
                         unique_prompt=user_input,
                         error_text=str(e)
                     )
