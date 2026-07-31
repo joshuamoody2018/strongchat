@@ -2,8 +2,8 @@
 
 from typing import Dict, Any
 
-from src.services.llm.wrapper import LLMWrapper
-from src.services.llm.aimessage import AIMessage
+from services.llm.wrapper import LLMWrapper
+from services.llm.aimessage import AIMessage
 
 
 class BaseService:

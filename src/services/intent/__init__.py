@@ -1,5 +1,5 @@
 """Intent disambiguation and generation service."""
 
-from .service import IntentService
+from services.intent.service import IntentService
 
 __all__ = ['IntentService']

@@ -2,8 +2,8 @@
 
 from typing import Dict, Any
 
-from src.services.base import BaseService
-from src.services.llm.aimessage import AIMessage
+from services.base import BaseService
+from services.llm.aimessage import AIMessage
 
 
 class IntentService(BaseService):

@@ -1,6 +1,6 @@
 """LLM service components"""
 
-from .aimessage import AIMessage
-from .wrapper import LLMWrapper
+from services.llm.aimessage import AIMessage
+from services.llm.wrapper import LLMWrapper
 
 __all__ = ['AIMessage', 'LLMWrapper']

@@ -3,12 +3,12 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
-from src.services.base import BaseService
-from src.services.embeddings import EmbeddingService
-from src.services.hyde import HydeService
-from src.services.intent import IntentService
-from src.services.retrieval import RetrievalService
-from src.services.vectordb import VerseStore
+from services.base import BaseService
+from services.embeddings import EmbeddingService
+from services.hyde import HydeService
+from services.intent import IntentService
+from services.retrieval import RetrievalService
+from services.vectordb import VerseStore
 
 
 @dataclass

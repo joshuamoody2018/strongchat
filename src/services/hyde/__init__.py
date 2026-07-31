@@ -1,5 +1,5 @@
 """HyDE generation service."""
 
-from .service import HydeService
+from services.hyde.service import HydeService
 
 __all__ = ['HydeService']
