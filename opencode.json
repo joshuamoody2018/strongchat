@@ -43,9 +43,8 @@
       "mode": "subagent",
       "model": "opencode-go/deepseek-v4-flash",
       "fallback_models": [
-        { "model": "openai/gpt-4o" },
-        { "model": "anthropic/claude-3-5-sonnet-20241022" },
-        { "model": "openrouter/mistralai/mistral-large" }
+        { "model": "opencode-go/deepseek-v4-flash" },
+        { "model": "openrouter/deepseek/deepseek-v4-flash" }
       ],
       "permission": {
         "edit": "deny",
@@ -59,9 +58,8 @@
       "mode": "subagent",
       "model": "opencode-go/minimax-m3",
       "fallback_models": [
-        { "model": "openai/gpt-4o" },
-        { "model": "anthropic/claude-3-5-sonnet-20241022" },
-        { "model": "openrouter/mistralai/mistral-large" }
+        { "model": "opencode-go/minimax-m3" },
+        { "model": "openrouter/minimax/minimax-m3" }
       ],
       "permission": {
         "edit": "ask",
@@ -75,9 +73,8 @@
       "mode": "subagent",
       "model": "opencode-go/deepseek-v4-pro",
       "fallback_models": [
-        { "model": "openai/gpt-4o" },
-        { "model": "anthropic/claude-3-5-sonnet-20241022" },
-        { "model": "openrouter/mistralai/mistral-large" }
+        { "model": "opencode-go/deepseek-v4-pro" },
+        { "model": "openrouter/deepseek/deepseek-v4-pro" }
       ],
       "permission": {
         "edit": "allow",
@@ -89,72 +86,64 @@
     "visual-engineering": {
       "model": "opencode-go/kimi-k2.7-code",
       "fallback_models": [
-        { "model": "openai/gpt-4o" },
-        { "model": "anthropic/claude-3-5-sonnet-20241022" },
-        { "model": "openrouter/mistralai/mistral-large" }
+        { "model": "opencode-go/kimi-k2.7-code" },
+        { "model": "openrouter/kimi/kimi-large-0.5" }
       ]
     },
 
     "ultrabrain": {
       "model": "opencode-go/minimax-m3",
       "fallback_models": [
-        { "model": "openai/gpt-4o" },
-        { "model": "anthropic/claude-3-5-sonnet-20241022" },
-        { "model": "openrouter/mistralai/mistral-large" }
+        { "model": "opencode-go/minimax-m3" },
+        { "model": "openrouter/minimax/minimax-m3" }
       ]
     },
 
     "deep": {
       "model": "opencode-go/minimax-m3",
       "fallback_models": [
-        { "model": "openai/gpt-4o" },
-        { "model": "anthropic/claude-3-5-sonnet-20241022" },
-        { "model": "openrouter/mistralai/mistral-large" }
+        { "model": "opencode-go/minimax-m3" },
+        { "model": "openrouter/minimax/minimax-m3" }
       ]
     },
 
     "artistry": {
       "model": "opencode-go/minimax-m3",
       "fallback_models": [
-        { "model": "openai/gpt-4o" },
-        { "model": "anthropic/claude-3-5-sonnet-20241022" },
-        { "model": "openrouter/mistralai/mistral-large" }
+        { "model": "opencode-go/minimax-m3" },
+        { "model": "openrouter/minimax/minimax-m3" }
       ]
     },
 
     "quick": {
-      "model": "opencode-go/minimax-m3.7",
+      "model": "opencode-go/glm-4.5-air",
       "fallback_models": [
-        { "model": "openai/gpt-4o" },
-        { "model": "anthropic/claude-3-5-sonnet-20241022" },
-        { "model": "openrouter/mistralai/mistral-large" }
+        { "model": "opencode-go/glm-4.5-air" },
+        { "model": "openrouter/z-ai/glm-4.5-air" }
       ]
     },
 
     "unspecified-low": {
-      "model": "opencode-go/qwen3.5-plus",
+      "model": "opencode-go/glm-4.5-air",
       "fallback_models": [
-        { "model": "openai/gpt-4o" },
-        { "model": "anthropic/claude-3-5-sonnet-20241022" },
-        { "model": "openrouter/mistralai/mistral-large" }
+        { "model": "opencode-go/glm-4.5-air" },
+        { "model": "openrouter/z-ai/glm-4.5-air" }
       ]
     },
 
     "unspecified-high": {
-      "model": "opencode-go/minimax-m3",
+      "model": "opencode-go/glm-4.5-air",
       "fallback_models": [
-        { "model": "openai/gpt-4o" },
-        { "model": "anthropic/claude-3-5-sonnet-20241022" },
-        { "model": "openrouter/mistralai/mistral-large" }
+        { "model": "opencode-go/glm-4.5-air" },
+        { "model": "openrouter/z-ai/glm-4.5-air" }
       ]
     },
 
     "writing": {
-      "model": "opencode-go/qwen3.5-plus",
+      "model": "opencode-go/glm-4.5-air",
       "fallback_models": [
-        { "model": "openai/gpt-4o" },
-        { "model": "anthropic/claude-3-5-sonnet-20241022" },
-        { "model": "openrouter/mistralai/mistral-large" }
+        { "model": "opencode-go/glm-4.5-air" },
+        { "model": "openrouter/z-ai/glm-4.5-air" }
       ]
     }
   },
