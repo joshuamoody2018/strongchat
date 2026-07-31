@@ -5,6 +5,7 @@ Runs the migration TWICE against a temp COPY of the live database (the live
 DB is never migrated by these tests) and verifies row flags, idempotency,
 and foreign-key enforcement via ChatDatabase (PRAGMA foreign_keys = ON).
 """
+import json
 import os
 import shutil
 import sqlite3
@@ -22,12 +23,10 @@ import migrate_pipeline_message_types as migration
 LIVE_DB = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'chat_database.db')
 
 EXPECTED_ACTIVE = {
-    'corpus_ingest',
-    'embedding_generation',
-    'error',
     'human_input',
-    'hyde_generation',
     'intent_generation',
+    'hyde_generation',
+    'embedding_generation',
     'llm_response',
 }
 
@@ -76,7 +75,9 @@ class TestPipelineMessageTypeMigration(unittest.TestCase):
             self.assertEqual(flags.get(slug), 1, f"{slug} should be active")
         self.assertNotIn('intent_disambiguation', flags)
         self.assertNotIn('intent_classification', flags)
-        self.assertEqual(len(flags), 7)
+        self.assertNotIn('error', flags)
+        self.assertNotIn('corpus_ingest', flags)
+        self.assertEqual(len(flags), 5)
 
     def test_new_row_field_values(self):
         """Spot-check the seeded rows carry the specified field values."""
@@ -88,28 +89,43 @@ class TestPipelineMessageTypeMigration(unittest.TestCase):
                     "SELECT * FROM ref_message_types WHERE slug IN (?, ?, ?, ?, ?)",
                     (
                         'human_input',
-                        'llm_response',
-                        'error',
+                        'intent_generation',
+                        'hyde_generation',
                         'embedding_generation',
-                        'corpus_ingest',
+                        'llm_response',
                     ),
                 )
             }
         self.assertEqual(rows['human_input']['creator_type'], 'human')
         self.assertEqual(rows['human_input']['step_name'], 'Human Input')
-        self.assertEqual(rows['llm_response']['creator_type'], 'llm')
-        self.assertEqual(rows['error']['creator_type'], 'programmatic')
+        self.assertEqual(rows['intent_generation']['creator_type'], 'programmatic')
+        self.assertEqual(rows['intent_generation']['step_name'], 'Intent Generation')
+        self.assertEqual(rows['hyde_generation']['creator_type'], 'programmatic')
+        self.assertEqual(rows['hyde_generation']['step_name'], 'HyDE Generation')
         self.assertEqual(
             rows['embedding_generation']['model_slug'],
             'openai/text-embedding-3-small',
         )
-        self.assertEqual(rows['corpus_ingest']['model_slug'], 'n/a')
+        self.assertEqual(rows['llm_response']['creator_type'], 'llm')
+        self.assertEqual(rows['llm_response']['step_name'], 'LLM Response')
+        
         for slug, row in rows.items():
             self.assertEqual(row['max_retries'], 3, slug)
             self.assertEqual(row['is_active'], 1, slug)
-            self.assertEqual(row['additional_model_settings'], '{}', slug)
-            self.assertIsNone(row['prompt_template'], slug)
-            self.assertEqual(row['temperature'], 0.0, slug)
+            
+            # Check additional_model_settings - some have actual settings
+            if slug in ['intent_generation', 'hyde_generation']:
+                self.assertIn('max_tokens', json.loads(row['additional_model_settings']), slug)
+                self.assertIsNotNone(row['prompt_template'], slug)
+                # Check specific temperatures
+                if slug == 'intent_generation':
+                    self.assertEqual(row['temperature'], 0.2, slug)
+                else:  # hyde_generation
+                    self.assertEqual(row['temperature'], 0.7, slug)
+            else:
+                self.assertEqual(row['additional_model_settings'], '{}', slug)
+                self.assertIsNone(row['prompt_template'], slug)
+                self.assertEqual(row['temperature'], 0.0, slug)
 
     def test_intent_generation_row_values(self):
         """The intent_generation row carries the refined schema/prompt."""

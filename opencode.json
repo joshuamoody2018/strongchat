@@ -96,33 +96,6 @@
     },
 
     "ultrabrain": {
-      "model": "opencode-go/kimi-k2.7-code",
-      "fallback_models": [
-        { "model": "openai/gpt-4o" },
-        { "model": "anthropic/claude-3-5-sonnet-20241022" },
-        { "model": "openrouter/mistralai/mistral-large" }
-      ]
-    },
-
-    "deep": {
-      "model": "opencode-go/kimi-k2.7-code",
-      "fallback_models": [
-        { "model": "openai/gpt-4o" },
-        { "model": "anthropic/claude-3-5-sonnet-20241022" },
-        { "model": "openrouter/mistralai/mistral-large" }
-      ]
-    },
-
-    "artistry": {
-      "model": "opencode-go/kimi-k2.7-code",
-      "fallback_models": [
-        { "model": "openai/gpt-4o" },
-        { "model": "anthropic/claude-3-5-sonnet-20241022" },
-        { "model": "openrouter/mistralai/mistral-large" }
-      ]
-    },
-
-    "quick": {
       "model": "opencode-go/minimax-m3",
       "fallback_models": [
         { "model": "openai/gpt-4o" },
@@ -131,8 +104,35 @@
       ]
     },
 
+    "deep": {
+      "model": "opencode-go/minimax-m3",
+      "fallback_models": [
+        { "model": "openai/gpt-4o" },
+        { "model": "anthropic/claude-3-5-sonnet-20241022" },
+        { "model": "openrouter/mistralai/mistral-large" }
+      ]
+    },
+
+    "artistry": {
+      "model": "opencode-go/minimax-m3",
+      "fallback_models": [
+        { "model": "openai/gpt-4o" },
+        { "model": "anthropic/claude-3-5-sonnet-20241022" },
+        { "model": "openrouter/mistralai/mistral-large" }
+      ]
+    },
+
+    "quick": {
+      "model": "opencode-go/minimax-m3.7",
+      "fallback_models": [
+        { "model": "openai/gpt-4o" },
+        { "model": "anthropic/claude-3-5-sonnet-20241022" },
+        { "model": "openrouter/mistralai/mistral-large" }
+      ]
+    },
+
     "unspecified-low": {
-      "model": "opencode-go/kimi-k2.7-code",
+      "model": "opencode-go/qwen3.5-plus",
       "fallback_models": [
         { "model": "openai/gpt-4o" },
         { "model": "anthropic/claude-3-5-sonnet-20241022" },
@@ -141,7 +141,7 @@
     },
 
     "unspecified-high": {
-      "model": "opencode-go/kimi-k2.7-code",
+      "model": "opencode-go/minimax-m3",
       "fallback_models": [
         { "model": "openai/gpt-4o" },
         { "model": "anthropic/claude-3-5-sonnet-20241022" },
@@ -150,7 +150,7 @@
     },
 
     "writing": {
-      "model": "opencode-go/kimi-k2.7-code",
+      "model": "opencode-go/qwen3.5-plus",
       "fallback_models": [
         { "model": "openai/gpt-4o" },
         { "model": "anthropic/claude-3-5-sonnet-20241022" },

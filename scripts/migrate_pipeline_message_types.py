@@ -37,22 +37,22 @@ PIPELINE_MESSAGE_TYPES = [
         'User-originated input message',
     ),
     (
-        'llm_response',
-        'LLM Response',
-        'llm',
-        '{"type":"object"}',
-        'n/a',
-        0.0,
-        'Assistant response message',
+        'intent_generation',
+        'Intent Generation',
+        'programmatic',
+        json.dumps(config.INTENT_GENERATION_SCHEMA),
+        MODEL_INTENT_GENERATION,
+        0.2,
+        'Refined multi-intent generation for a user query',
     ),
     (
-        'error',
-        'Error',
+        'hyde_generation',
+        'HyDE Generation',
         'programmatic',
-        '{"type":"object"}',
-        'n/a',
-        0.0,
-        'Error record for failed operations',
+        json.dumps(config.HYDE_GENERATION_SCHEMA),
+        MODEL_HYDE_GENERATION,
+        0.7,
+        'Hypothetical biblical passage generated from a single intent',
     ),
     (
         'embedding_generation',
@@ -64,13 +64,13 @@ PIPELINE_MESSAGE_TYPES = [
         'Batched embedding generation call record (summary only, never raw vectors)',
     ),
     (
-        'corpus_ingest',
-        'Corpus Ingest',
-        'programmatic',
-        '{"type":"object","properties":{"translation":{"type":"string"},"verses":{"type":"integer"},"status":{"type":"string"}},"required":["translation","verses","status"]}',
+        'llm_response',
+        'LLM Response',
+        'llm',
+        '{"type":"object"}',
         'n/a',
         0.0,
-        'One summary row per translation corpus ingest',
+        'Assistant response message',
     ),
 ]
 
@@ -82,7 +82,7 @@ VALUES (?, ?, ?, ?, ?, ?, '{}', 3, 1, ?, NULL)
 """
 
 DELETE_SQL = (
-    "DELETE FROM ref_message_types WHERE slug IN ('intent_disambiguation', 'intent_classification')"
+    "DELETE FROM ref_message_types WHERE slug IN ('intent_disambiguation', 'intent_classification', 'error', 'corpus_ingest')"
 )
 
 INTENT_GENERATION_SQL = """
