@@ -49,14 +49,16 @@ This file contains the project-specific model optimizations:
 - **Powerful models for critical tasks**: `auto-router` (deepseek-v4-flash), `architect` (minimax-m3), `developer` (deepseek-v4-pro)
 - **Speed-optimized models for simple tasks**: `explore` and `librarian` use glm-4.5-air for faster search and documentation
 - **Category-based optimization**: 
-  - Complex work (visual-engineering, ultrabrain, deep, artistry) uses powerful kimi-k2.7-code models
+  - Complex work (visual-engineering, ultrabrain, deep, artistry) uses powerful kimi-k2.7-code or minimax-m3 models
   - Simple tasks (quick, unspecified-low, unspecified-high, writing) uses fast glm-4.5-air models
+- **Fallback strategy**: opencode-go primary → openrouter same model (ensures continuity when credits run out)
 
 #### Global OMO Configuration (`~/.config/opencode/oh-my-openagent.json`)
 This file contains the global agent optimizations:
 - **Reasoning-intensive agents** (sisyphus, hephaestus, oracle, multimodal-looker, prometheus, metis, momus) use powerful minimax-m3 variants
 - **Speed-optimized agents** (explore, librarian, atlas, sisyphus-junior) use fast glm-4.5-air
 - **Categories follow same pattern**: Complex work uses powerful models, simple tasks use fast models
+- **Fallback strategy**: opencode-go primary → openrouter same model (ensures continuity when credits run out)
 
 ### 6. Start CodeGraph MCP Server
 ```bash
@@ -84,11 +86,13 @@ opencode mcp list
 - **Use cases**: Complex reasoning, architecture, planning, critical decisions
 - **Models**: kimi-k2.7-code (variants), deepseek-v4-pro, deepseek-v4-flash
 - **Agents**: architect, developer, oracle, momus, visual-engineering category
+- **Fallback**: opencode-go → openrouter (same model)
 
 ### Fast Models (Speed & Cost-Focused)
 - **Use cases**: Search, exploration, documentation, simple tasks, background work
 - **Models**: glm-4.5-air
 - **Agents**: explore, librarian, quick, unspecified-low/unspecified-high/writing categories
+- **Fallback**: opencode-go → openrouter (same model)
 
 ### Why This Configuration?
 - **Performance**: 30-50% faster responses for most tasks
