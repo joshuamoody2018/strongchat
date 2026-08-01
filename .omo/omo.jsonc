@@ -61,7 +61,7 @@
         ]
       },
       "multimodal-looker": {
-        "model": "opencode-go/minimax-m3",
+        "model": "openrouter/minimax/minimax-m3",
         "fallback_models": [
           {
             "model": "opencode-go/minimax-m3"
