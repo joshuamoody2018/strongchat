@@ -1,12 +1,14 @@
 # AGENTS.md - StrongChat Agent Reference
 
-## ACTIVE WORK IN PROGRESS — READ THIS FIRST (updated 2026-07-28)
-An orchestrated work plan is mid-execution. **Resume it before starting any new work.**
-- **Plan**: `hyde-retrieval-pipeline` — intent generation → parallel HyDE generation → OpenRouter embeddings → Chroma retrieval over KJV+WEB. **Progress: 5/24 tasks complete** (todos 1-5 done, verified, committed).
-- **Next task**: todo 6 (cache db_path injection + FK pragma + message-type migration). **Partially started**: `src/config/cache.py` in the working tree already carries the todo-6(a) db_path injection + `reset()` classmethod (uncommitted, written by stalled session `ses_0592d876cffelbhH3TTwhp06ML`, reviewed as sane but not yet tested). Still missing: 6(b) FK pragma in `database.py`, 6(c) `scripts/migrate_pipeline_message_types.py` + `scripts/test_migration.py` + live migration run + commit. Resume by verifying the cache.py edit (run test_database_queries.py + a cache smoke) then completing 6(b)/6(c).
-- **How to resume**: run `/start-work hyde-retrieval-pipeline` — the boulder hook auto-continues from the first unchecked todo.
-- **State files (all under `.omo/`, now committed)**: `boulder.json` (active work), `plans/hyde-retrieval-pipeline.md` (plan + checkboxes — ground truth), `drafts/hyde-retrieval-pipeline.md` (decisions D1-D6), `notepads/hyde-retrieval-pipeline/` (learnings/issues), `start-work/ledger.jsonl` (evidence ledger), `for-user-review.md` (significant deviations for the user), `evidence/` (per-task QA transcripts).
-- **Operational rules for the resumer**: use `.venv/bin/python` for everything; one commit per todo with explicit-path staging (NEVER `git add -A`); never stage `.env`, `data/`, `README.md`, `.gitignore` (user's pending edits), `*.pyc`; freeform sentence-case commit messages; every OpenRouter call recorded in `messages` linked to `ref_message_types`.
+## ACTIVE WORK STATUS (updated 2026-08-01)
+No active orchestrated work. The `hyde-retrieval-pipeline` plan completed 2026-08-01 (24/24 todos — see `.omo/boulder.json` and `.omo/plans/hyde-retrieval-pipeline.md`). Start a new plan with `/ulw-plan` when ready.
+
+## Project operational conventions
+- Use `.venv/bin/python` for everything.
+- One commit per todo with explicit-path staging (NEVER `git add -A`).
+- Never stage `.env`, `data/`, `*.pyc`, or files under `.venv/`; review `README.md` and `.gitignore` before staging.
+- Freeform sentence-case commit messages.
+- Every OpenRouter call recorded in `messages` linked to `ref_message_types`.
 
 ## Project Overview
 - **Purpose**: Bible verse retrieval and answer synthesis using LLMs
@@ -47,4 +49,5 @@ An orchestrated work plan is mid-execution. **Resume it before starting any new 
   - New pipeline steps implemented
   - Development conventions change
   - New services added to `src/services/`
+  - The "ACTIVE WORK STATUS" section is stale (plan started, completed, or paused)
 * **Refer to**: `todo.md` for planned update mechanism
