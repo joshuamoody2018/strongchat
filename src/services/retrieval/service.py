@@ -97,6 +97,11 @@ class RetrievalService(BaseService):
 
         raw_results = await asyncio.gather(*tasks)
 
+        embedding_by_doc_index: Dict[int, List[float]] = {
+            doc_index: embedding
+            for (doc_index, _), embedding in zip(valid_docs, embeddings)
+        }
+
         results: List[Dict[str, Any]] = []
         for (doc_index, doc, translation), raw in zip(task_keys, raw_results):
             results.append(
@@ -104,6 +109,7 @@ class RetrievalService(BaseService):
                     "intent_id": doc.get("intent_id"),
                     "doc_index": doc_index,
                     "translation": translation,
+                    "embedding": embedding_by_doc_index.get(doc_index),
                     "hits": self._format_hits(raw),
                 }
             )
