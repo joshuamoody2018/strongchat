@@ -38,4 +38,10 @@ logs/
 # Database files
 *.db
 *.sqlite
-*.sqlite3
+*.sqlite3.omo/boulder.json
+.omo/run-continuation/
+.omo/drafts/
+.omo/evidence/
+.omo/notepads/
+.omo/plans/
+.omo/start-work/

@@ -1,12 +1,10 @@
- {
+{
   "$schema": "https://opencode.ai/config.json",
   "username": "developer",
-  "model": "opencode-go/minimax-m3",
-  "small_model": "opencode-go/deepseek-v4-pro",
-  "default_agent": "general",
-
-  "plugin": ["opencode-codegraph"],
-
+  "model": "openrouter/minimax/minimax-m3",
+  "small_model": "openrouter/z-ai/glm-4.5-air",
+  "default_agent": "sisyphus",
+  "plugin": ["oh-my-openagent@latest", "opencode-codegraph"],
   "mcp": {
     "codegraph": {
       "type": "local",
@@ -16,161 +14,14 @@
       }
     }
   },
-
   "provider": {
-    "opencode-go": {
-      "options": {
-        "apiKey": "{env:OPENCODE_GO_API_KEY}"
-      }
-    },
-    "opencode": {
-      "options": {
-        "apiKey": "{env:OPENCODE_GO_API_KEY}"
-      }
-    },
     "openrouter": {
       "options": {
         "apiKey": "{env:OPENROUTER_API_KEY}"
       }
     }
   },
-
-  "enabled_providers": ["opencode-go", "opencode", "openrouter"],
-
-  "agent": {
-    "auto-router": {
-      "description": "Intelligent task routing with automatic agent selection",
-      "mode": "subagent",
-      "model": "opencode-go/deepseek-v4-flash",
-      "fallback_models": [
-        { "model": "opencode-go/deepseek-v4-flash" },
-        { "model": "openrouter/deepseek/deepseek-v4-flash" }
-      ],
-      "permission": {
-        "edit": "deny",
-        "bash": "deny",
-        "read": "allow"
-      }
-    },
-
-    "architect": {
-      "description": "Handles architecture, planning, and complex technical questions using MiniMax M3",
-      "mode": "subagent",
-      "model": "opencode-go/minimax-m3",
-      "fallback_models": [
-        { "model": "opencode-go/minimax-m3" },
-        { "model": "openrouter/minimax/minimax-m3" }
-      ],
-      "permission": {
-        "edit": "ask",
-        "bash": "ask",
-        "read": "allow"
-      }
-    },
-
-    "developer": {
-      "description": "Handles code changes, plan implementation, and straightforward development tasks using DeepSeek V4 Pro",
-      "mode": "subagent",
-      "model": "opencode-go/deepseek-v4-pro",
-      "fallback_models": [
-        { "model": "opencode-go/deepseek-v4-pro" },
-        { "model": "openrouter/deepseek/deepseek-v4-pro" }
-      ],
-      "permission": {
-        "edit": "allow",
-        "bash": "ask",
-        "read": "allow"
-      }
-    },
-
-    "visual-engineering": {
-      "model": "opencode-go/kimi-k2.7-code",
-      "fallback_models": [
-        { "model": "opencode-go/kimi-k2.7-code" },
-        { "model": "openrouter/kimi/kimi-k2.7-code" }
-      ]
-    },
-
-    "ultrabrain": {
-      "model": "opencode-go/minimax-m3",
-      "fallback_models": [
-        { "model": "opencode-go/minimax-m3" },
-        { "model": "openrouter/minimax/minimax-m3" }
-      ]
-    },
-
-    "deep": {
-      "model": "opencode-go/minimax-m3",
-      "fallback_models": [
-        { "model": "opencode-go/minimax-m3" },
-        { "model": "openrouter/minimax/minimax-m3" }
-      ]
-    },
-
-    "artistry": {
-      "model": "opencode-go/minimax-m3",
-      "fallback_models": [
-        { "model": "opencode-go/minimax-m3" },
-        { "model": "openrouter/minimax/minimax-m3" }
-      ]
-    },
-
-    "quick": {
-      "model": "opencode-go/glm-4.5-air",
-      "fallback_models": [
-        { "model": "opencode-go/glm-4.5-air" },
-        { "model": "openrouter/z-ai/glm-4.5-air" }
-      ]
-    },
-
-    "unspecified-low": {
-      "model": "opencode-go/glm-4.5-air",
-      "fallback_models": [
-        { "model": "opencode-go/glm-4.5-air" },
-        { "model": "openrouter/z-ai/glm-4.5-air" }
-      ]
-    },
-
-    "unspecified-high": {
-      "model": "opencode-go/glm-4.5-air",
-      "fallback_models": [
-        { "model": "opencode-go/glm-4.5-air" },
-        { "model": "openrouter/z-ai/glm-4.5-air" }
-      ]
-    },
-
-    "writing": {
-      "model": "opencode-go/glm-4.5-air",
-      "fallback_models": [
-        { "model": "opencode-go/glm-4.5-air" },
-        { "model": "openrouter/z-ai/glm-4.5-air" }
-      ]
-    }
-  },
-
-  "experimental": {
-    "primary_tools": ["edit", "read"]
-  },
-
-  "instructions": [
-    "AGENTS.md",
-    "LLM_FRAMEWORK.md",
-    "architecture/",
-    ".codegraph/AGENTS.md",
-    ".codegraph/SCENARIO_PLAYBOOK.md"
-  ],
-
-  "references": {
-    "docs": {
-      "path": "architecture",
-      "description": "System design and architecture documentation"
-    },
-    "code": {
-      "path": "src",
-      "description": "Source code and implementation details"
-    }
-  },
-
+  "enabled_providers": ["openrouter"],
   "permission": {
     "read": "allow",
     "edit": "allow",
@@ -198,16 +49,13 @@
       "unlink": "ask"
     }
   },
-
   "logLevel": "INFO",
   "autoupdate": "notify",
   "snapshot": true,
-
   "tool_output": {
     "max_lines": 200,
     "max_bytes": 8192
   },
-
   "compaction": {
     "auto": true,
     "prune": true,

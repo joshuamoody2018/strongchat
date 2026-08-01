@@ -1,0 +1,216 @@
+// OMO configuration
+{
+  "$schema": "https://raw.githubusercontent.com/code-yeongyu/oh-my-openagent/dev/assets/omo.schema.json",
+  "[opencode]": {
+    "agents": {
+      "sisyphus": {
+        "model": "openrouter/minimax/minimax-m3",
+        "fallback_models": [
+          {
+            "model": "opencode-go/minimax-m3"
+          },
+          {
+            "model": "openrouter/minimax/minimax-m3"
+          }
+        ]
+      },
+      "hephaestus": {
+        "model": "openrouter/minimax/minimax-m3",
+        "variant": "high",
+        "fallback_models": [
+          {
+            "model": "opencode-go/minimax-m3"
+          },
+          {
+            "model": "openrouter/minimax/minimax-m3"
+          }
+        ]
+      },
+      "oracle": {
+        "model": "openrouter/minimax/minimax-m3",
+        "variant": "max",
+        "fallback_models": [
+          {
+            "model": "opencode-go/minimax-m3"
+          },
+          {
+            "model": "openrouter/minimax/minimax-m3"
+          }
+        ]
+      },
+      "librarian": {
+        "model": "openrouter/z-ai/glm-4.5-air",
+        "fallback_models": [
+          {
+            "model": "opencode-go/glm-4.5-air"
+          },
+          {
+            "model": "openrouter/z-ai/glm-4.5-air"
+          }
+        ]
+      },
+      "explore": {
+        "model": "openrouter/z-ai/glm-4.5-air",
+        "fallback_models": [
+          {
+            "model": "opencode-go/glm-4.5-air"
+          },
+          {
+            "model": "openrouter/z-ai/glm-4.5-air"
+          }
+        ]
+      },
+      "multimodal-looker": {
+        "model": "opencode-go/minimax-m3",
+        "fallback_models": [
+          {
+            "model": "opencode-go/minimax-m3"
+          },
+          {
+            "model": "openrouter/minimax/minimax-m3"
+          }
+        ]
+      },
+      "prometheus": {
+        "model": "openrouter/minimax/minimax-m3",
+        "variant": "high",
+        "fallback_models": [
+          {
+            "model": "opencode-go/minimax-m3"
+          },
+          {
+            "model": "openrouter/minimax/minimax-m3"
+          }
+        ]
+      },
+      "metis": {
+        "model": "openrouter/minimax/minimax-m3",
+        "variant": "high",
+        "fallback_models": [
+          {
+            "model": "opencode-go/minimax-m3"
+          },
+          {
+            "model": "openrouter/minimax/minimax-m3"
+          }
+        ]
+      },
+      "momus": {
+        "model": "openrouter/minimax/minimax-m3",
+        "variant": "max",
+        "fallback_models": [
+          {
+            "model": "opencode-go/minimax-m3"
+          },
+          {
+            "model": "openrouter/minimax/minimax-m3"
+          }
+        ]
+      },
+      "atlas": {
+        "model": "openrouter/z-ai/glm-4.5-air",
+        "fallback_models": [
+          {
+            "model": "opencode-go/glm-4.5-air"
+          },
+          {
+            "model": "openrouter/z-ai/glm-4.5-air"
+          }
+        ]
+      },
+      "sisyphus-junior": {
+        "model": "openrouter/z-ai/glm-4.5-air",
+        "fallback_models": [
+          {
+            "model": "opencode-go/glm-4.5-air"
+          },
+          {
+            "model": "openrouter/z-ai/glm-4.5-air"
+          }
+        ]
+      }
+    },
+    "categories": {
+      "visual-engineering": {
+        "model": "openrouter/moonshotai/kimi-k2.7-code",
+        "variant": "high",
+        "fallback_models": [
+          {
+            "model": "opencode-go/kimi-2.7-code"
+          }
+        ]
+      },
+      "ultrabrain": {
+        "model": "openrouter/moonshotai/kimi-k2.7-code",
+        "variant": "max",
+        "fallback_models": [
+          {
+            "model": "opencode-go/kimi-k2.7-code"
+          }
+        ]
+      },
+      "deep": {
+        "model": "openrouter/moonshotai/kimi-k2.7-code",
+        "variant": "max",
+        "fallback_models": [
+          {
+            "model": "opencode-go/kimi-k2.7-code"
+          }
+        ]
+      },
+      "artistry": {
+        "model": "openrouter/moonshotai/kimi-k2.7-code",
+        "variant": "high",
+        "fallback_models": [
+          {
+            "model": "opencode-go/kimi-k2.7-code"
+          }
+        ]
+      },
+      "quick": {
+        "model": "openrouter/z-ai/glm-4.5-air",
+        "fallback_models": [
+          {
+            "model": "opencode-go/glm-4.5-air"
+          }
+        ]
+      },
+      "unspecified-low": {
+        "model": "openrouter/z-ai/glm-4.5-air",
+        "fallback_models": [
+          {
+            "model": "opencode-go/glm-4.5-air"
+          },
+          {
+            "model": "openrouter/z-ai/glm-4.5-air"
+          }
+        ]
+      },
+      "unspecified-high": {
+        "model": "openrouter/z-ai/glm-4.5-air",
+        "fallback_models": [
+          {
+            "model": "opencode-go/glm-4.5-air"
+          },
+          {
+            "model": "openrouter/z-ai/glm-4.5-air"
+          }
+        ]
+      },
+      "writing": {
+        "model": "openrouter/z-ai/glm-4.5-air",
+        "fallback_models": [
+          {
+            "model": "opencode-go/glm-4.5-air"
+          },
+          {
+            "model": "openrouter/z-ai/glm-4.5-air"
+          }
+        ]
+      }
+    }
+  },
+  "_migrations": [
+    "2026-07-opencode-config-unification"
+  ]
+}
