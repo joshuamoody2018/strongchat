@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""Live end-to-end context retrieval integration test.
+
+Runs the full PipelineRunner against the real OpenRouter API and the live
+ChromaDB collections, then validates that every hit carries a context_bundle
+with the expected structure. Skips loudly when the API key is missing or the
+local data is not fully populated.
+
+Run with the environment loaded:
+    set -a; . ./.env; set +a; .venv/bin/python tests/system/test_context_retrieval_e2e.py
+"""
+
+import asyncio
+import json
+import os
+import re
+import sqlite3
+import sys
+
+import chromadb
+from dotenv import load_dotenv
+
+# Add src directory to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+
+from services.pipeline.runner import PipelineRunner
+from config.context_constants import MIN_WORDS_AFTER_TRIM
+from services.sqlite.database import ChatDatabase
+
+
+QUERY = "what does the Bible say about fear"
+MIN_VERSES = 30_000
+REFERENCE_RE = re.compile(r'^(?:\w+\s)+\d+:\d+$')
+
+
+def _check_skip_conditions() -> tuple[bool, str]:
+    """Check if we should skip the test and return (should_skip, reason)."""
+    # Check API key
+    load_dotenv()
+    api_key = os.getenv('OPENROUTER_API_KEY')
+    if not api_key or api_key == 'your_openrouter_api_key_here':
+        return True, "SKIP: OPENROUTER_API_KEY is not present in the environment."
+    
+    # Check macula_index.db
+    macula_db_path = os.path.join('data', 'macula_index.db')
+    if not os.path.exists(macula_db_path):
+        return True, f"SKIP: macula_index.db not found at {macula_db_path}"
+    
+    # Check macula-greek.tsv
+    macula_tsv_path = os.path.join('data', 'macula', 'macula-greek.tsv')
+    if not os.path.exists(macula_tsv_path):
+        return True, f"SKIP: macula-greek.tsv not found at {macula_tsv_path}"
+    
+    # Check ChromaDB collections
+    chroma_path = os.path.join('data', 'chroma')
+    if not os.path.isdir(chroma_path):
+        return True, f"SKIP: ChromaDB path not found: {chroma_path}"
+    
+    client = chromadb.PersistentClient(path=chroma_path)
+    for name in ('kjv_verses', 'web_verses'):
+        try:
+            collection = client.get_collection(name)
+        except Exception as exc:
+            return True, f"SKIP: cannot open collection {name}: {exc}"
+        
+        count = collection.count()
+        if count < MIN_VERSES:
+            return True, (
+                f"SKIP: collection {name} has {count} verses "
+                f"(need >= {MIN_VERSES})"
+            )
+    
+    return False, ""
+
+
+def _get_context_retrieval_messages(db: ChatDatabase, session_uuid: str) -> list[dict]:
+    """Return all context_retrieval messages for a session."""
+    return db.get_messages_by_session_and_type(session_uuid, 'context_retrieval')
+
+
+def _validate_context_bundles(result) -> None:
+    """Validate that every hit has a properly structured context_bundle."""
+    for item in result.results:
+        hits = item.get('hits', [])
+        for hit in hits:
+            # (a) every hit has a context_bundle key
+            assert 'context_bundle' in hit, "hit missing context_bundle key"
+            
+            bundle = hit['context_bundle']
+            
+            # Only validate kept_word_count for successful retrievals
+            build_summary = bundle.get('build_summary', '')
+            if build_summary not in ['unparseable reference'] and not build_summary.startswith('no macula tokens for'):
+                # (b) every successful context_bundle has kept_word_count >= MIN_WORDS_AFTER_TRIM
+                kept_word_count = bundle.get('kept_word_count', 0)
+                assert kept_word_count >= MIN_WORDS_AFTER_TRIM, (
+                    f"kept_word_count {kept_word_count} < {MIN_WORDS_AFTER_TRIM} for successful retrieval"
+                )
+                
+                # (c) kept_words is a strict subset of the unique-word count from scored_words
+                kept_words = bundle.get('kept_words', [])
+                scored_words = bundle.get('scored_words', [])
+                unique_word_count = bundle.get('unique_word_count', 0)
+                
+                assert len(kept_words) <= len(scored_words), (
+                    f"kept_words count {len(kept_words)} > scored_words count {len(scored_words)}"
+                )
+                assert len(kept_words) <= unique_word_count, (
+                    f"kept_words count {len(kept_words)} > unique_word_count {unique_word_count}"
+                )
+                
+                # (d) at least one scored_words entry has pos in ('V-', 'N-')
+                has_content_word = any(
+                    word.get('pos', '') in ('V-', 'N-') 
+                    for word in scored_words
+                )
+                assert has_content_word, (
+                    "no scored_words entry with pos in ('V-', 'N-')"
+                )
+
+
+def _validate_context_retrieval_messages(db: ChatDatabase, session_uuid: str, num_intents: int, result) -> None:
+    """Validate context_retrieval message counts and error status."""
+    messages = _get_context_retrieval_messages(db, session_uuid)
+    
+    # (e) one context_retrieval row per intent that had search results
+    expected_count = sum(1 for trace in result.traces.values() if trace.search_results)
+    assert len(messages) == expected_count, (
+        f"expected {expected_count} context_retrieval messages, got {len(messages)}"
+    )
+    
+    # (f) every context_retrieval row has error_text IS NULL
+    for msg in messages:
+        assert msg.get('error_text') is None, (
+            f"context_retrieval message has error_text: {msg.get('error_text')}"
+        )
+
+
+def _print_top_kept_words(result) -> None:
+    """Print the first 3 kept words of the top-scoring hit per translation."""
+    hits_by_translation: dict[str, list[dict]] = {}
+    for item in result.results:
+        translation = item['translation']
+        hits = item.get('hits', [])
+        hits_by_translation.setdefault(translation, []).extend(hits)
+    
+    for translation in sorted(hits_by_translation):
+        hits = hits_by_translation[translation]
+        hits.sort(key=lambda hit: hit.get('distance', float('inf')))
+        top_hit = hits[0]
+        bundle = top_hit.get('context_bundle', {})
+        kept_words = bundle.get('kept_words', [])
+        
+        print(f"  Top {translation.upper()} hit: {top_hit.get('reference', 'unknown')}")
+        if kept_words:
+            print("    First 3 kept words:")
+            for word in kept_words[:3]:
+                print(
+                    f"      {word.get('strongs', 'no-strongs')}: "
+                    f"{word.get('surface', 'no-surface')} "
+                    f"({word.get('pos', 'no-pos')}, "
+                    f"score: {word.get('composite_score', 0):.3f})"
+                )
+        else:
+            print("    No kept words found")
+
+
+async def run_tests() -> bool:
+    """Run the live context retrieval end-to-end test."""
+    print("=== Live Context Retrieval End-to-End Integration Test ===\n")
+    
+    should_skip, reason = _check_skip_conditions()
+    if should_skip:
+        print(reason)
+        return True
+    
+    runner = PipelineRunner()
+    try:
+        result = await runner.run(QUERY, top_k=5)
+        print(f"Session: {result.session_uuid}")
+        print(f"Intents: {len(result.intents)}")
+        print(f"HyDE docs: {len(result.hyde_docs)}")
+        
+        _validate_context_bundles(result)
+        _validate_context_retrieval_messages(runner.db, result.session_uuid, len(result.intents), result)
+        _print_top_kept_words(result)
+        
+        print("\n=== Result ===")
+        print("PASS")
+        return True
+    except AssertionError as exc:
+        print(f"FAIL: {exc}")
+        return False
+    except Exception as exc:
+        print(f"ERROR: {exc}")
+        return False
+    finally:
+        runner.close()
+
+
+if __name__ == '__main__':
+    success = asyncio.run(run_tests())
+    sys.exit(0 if success else 1)
