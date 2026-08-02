@@ -91,7 +91,6 @@ else
 fi
 
 log "Seeding message types..."
-"$PYTHON" scripts/populate_message_types.py --db-path "$DB_PATH"
 "$PYTHON" scripts/migrate_pipeline_message_types.py --db-path "$DB_PATH"
 
 log "Downloading Macula Greek corpus (Clear-Bible/macula-greek, CC BY 4.0)..."
@@ -112,6 +111,20 @@ else
     log "Macula index already populated; skipping build."
 fi
 
+log "Downloading Bible corpus (KJV + WEB)..."
+if [ ! -f data/bible/kjv.json ]; then
+  .venv/bin/python scripts/download_bible_corpus.py
+else
+  log "Bible corpus already present at data/bible/kjv.json; skipping download."
+fi
+
+log "Ingesting Bible corpus into ChromaDB..."
+if [ ! -f data/chroma/chroma.sqlite3 ]; then
+  .venv/bin/python scripts/ingest_corpus.py
+else
+  log "ChromaDB already populated at data/chroma/chroma.sqlite3; skipping ingest."
+fi
+
 log "Environment setup complete."
-log "Macula data + lexicons ingested. To re-run: delete data/macula_index.db or data/macula/macula-greek.tsv and re-run this script."
+log "Macula + Bible data ingested, ChromaDB populated. To re-run: delete data/macula_index.db, data/macula/macula-greek.tsv, data/bible/*.json, or data/chroma/ and re-run this script."
 log "Activate the virtual environment with: source $VENV_DIR/bin/activate"
