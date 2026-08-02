@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from services.base import BaseService
+from services.context import ContextRetrievalService
 from services.embeddings import EmbeddingService
 from services.hyde import HydeService
 from services.intent import IntentService
@@ -155,6 +156,7 @@ class PipelineRunner(BaseService):
         )
         self.intent_service = IntentService(db_path)
         self.hyde_service = HydeService(db_path)
+        self.context_service = ContextRetrievalService(db_path)
 
     async def run_intent_only(
         self,
@@ -260,7 +262,8 @@ class PipelineRunner(BaseService):
                 if translation is not None:
                     traces[intent_id].search_results[translation] = r.get("hits", [])
 
-        return PipelineResult(
+        # Create the PipelineResult early for context retrieval
+        result = PipelineResult(
             session_uuid=session_uuid,
             query=query,
             traces=traces,
@@ -268,8 +271,23 @@ class PipelineRunner(BaseService):
             recommended_search_approach=recommended_search_approach,
         )
 
+        # Stage 5: Context retrieval — attach original-language bundles to each hit.
+        try:
+            await self.context_service.retrieve_for_pipeline(result, session_uuid)
+        except Exception as e:
+            # Log but don't propagate - context retrieval should not break the pipeline
+            print(f"Context retrieval failed: {e}")
+            pass
+
+        return result
+
     def close(self) -> None:
         """Close all owned services and the runner's own database connection."""
+        try:
+            self.context_service.close()
+        except Exception:
+            # Log but don't propagate - close should not fail
+            pass
         self.retrieval_service.close()
         self.hyde_service.llm.close()
         self.intent_service.llm.close()

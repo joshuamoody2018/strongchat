@@ -582,6 +582,193 @@ class TestPipelineRunnerPopulatesTraces(unittest.TestCase):
         self.assertIsNone(by_id["trust"]["hyde_document"])
         self.assertEqual(by_id["trust"]["error"], "LLM timeout")
 
+    def test_context_bundle_attached_to_each_hit_after_runner(self):
+        """Mock ContextRetrievalService and verify context bundles are attached to each hit."""
+        intents = [_make_intent("comfort", is_primary=True)]
+        hyde_docs = [
+            {"intent_id": "comfort", "hyde_document": "hyde text", "message_uuid": "m1"}
+        ]
+        embedding = _deterministic_vector("hyde text")
+        retrieval_results = [
+            {
+                "intent_id": "comfort",
+                "doc_index": 0,
+                "translation": "kjv",
+                "embedding": embedding,
+                "hits": [_make_hit("John 3:16", 0.0, "kjv")],
+            },
+            {
+                "intent_id": "comfort",
+                "doc_index": 0,
+                "translation": "web",
+                "embedding": embedding,
+                "hits": [_make_hit("John 3:16", 0.0, "web")],
+            },
+        ]
+        intent_response = {
+            "message_uuid": "intent-msg-1",
+            "query_analysis": {"original_query": "why", "core_questions": ["why"]},
+            "intents": intents,
+            "recommended_search_approach": "hyde_then_search",
+        }
+
+        runner = self._make_runner()
+
+        async def fake_generate_intents(query, session_uuid):
+            return intent_response
+
+        async def fake_generate_for_intents(intents_in, session_uuid):
+            self.assertEqual(intents_in, intents)
+            return hyde_docs
+
+        async def fake_search(hyde_docs_in, session_uuid, **kwargs):
+            self.assertEqual(hyde_docs_in, hyde_docs)
+            return retrieval_results
+
+        async def fake_embed_texts(texts, **kwargs):
+            self.assertEqual(texts, ["hyde text"])
+            return [embedding]
+
+        # Mock ContextRetrievalService to add context bundles to hits
+        async def fake_retrieve_for_pipeline(result, session_uuid):
+            # Mutate each hit in-place to add context_bundle
+            for trace in result.traces.values():
+                for translation, hits in trace.search_results.items():
+                    for hit in hits:
+                        hit["context_bundle"] = {
+                            "hit_id": hit["id"],
+                            "reference": hit["reference"],
+                            "translation": translation,
+                            "unique_word_count": 5,
+                            "kept_word_count": 3,
+                            "scored_words": ["love", "god", "comfort"],
+                        }
+
+        with patch.object(
+            runner.intent_service, "generate_intents",
+            new=AsyncMock(side_effect=fake_generate_intents),
+        ), patch.object(
+            runner.hyde_service, "generate_for_intents",
+            new=AsyncMock(side_effect=fake_generate_for_intents),
+        ), patch.object(
+            runner.retrieval_service, "search",
+            new=AsyncMock(side_effect=fake_search),
+        ), patch.object(
+            runner.embedding_service, "embed_texts",
+            new=AsyncMock(side_effect=fake_embed_texts),
+        ), patch.object(
+            runner.context_service, "retrieve_for_pipeline",
+            new=AsyncMock(side_effect=fake_retrieve_for_pipeline),
+        ):
+            try:
+                result = asyncio.run(
+                    runner.run(
+                        query="why do bad things happen",
+                        top_k=5,
+                        translations=("kjv", "web"),
+                    )
+                )
+            finally:
+                runner.close()
+
+        # Verify every hit has a context_bundle
+        for trace in result.traces.values():
+            for translation, hits in trace.search_results.items():
+                for hit in hits:
+                    self.assertIn("context_bundle", hit)
+                    bundle = hit["context_bundle"]
+                    self.assertEqual(bundle["hit_id"], hit["id"])
+                    self.assertEqual(bundle["reference"], hit["reference"])
+                    self.assertEqual(bundle["translation"], translation)
+                    self.assertEqual(bundle["unique_word_count"], 5)
+                    self.assertEqual(bundle["kept_word_count"], 3)
+                    self.assertEqual(bundle["scored_words"], ["love", "god", "comfort"])
+
+    def test_context_error_path(self):
+        """Test that context retrieval errors don't break the pipeline."""
+        intents = [_make_intent("comfort", is_primary=True)]
+        hyde_docs = [
+            {"intent_id": "comfort", "hyde_document": "hyde text", "message_uuid": "m1"}
+        ]
+        embedding = _deterministic_vector("hyde text")
+        retrieval_results = [
+            {
+                "intent_id": "comfort",
+                "doc_index": 0,
+                "translation": "kjv",
+                "embedding": embedding,
+                "hits": [_make_hit("John 3:16", 0.0, "kjv")],
+            },
+        ]
+        intent_response = {
+            "message_uuid": "intent-msg-1",
+            "query_analysis": {"original_query": "why", "core_questions": ["why"]},
+            "intents": intents,
+            "recommended_search_approach": "hyde_then_search",
+        }
+
+        runner = self._make_runner()
+
+        async def fake_generate_intents(query, session_uuid):
+            return intent_response
+
+        async def fake_generate_for_intents(intents_in, session_uuid):
+            self.assertEqual(intents_in, intents)
+            return hyde_docs
+
+        async def fake_search(hyde_docs_in, session_uuid, **kwargs):
+            self.assertEqual(hyde_docs_in, hyde_docs)
+            return retrieval_results
+
+        async def fake_embed_texts(texts, **kwargs):
+            self.assertEqual(texts, ["hyde text"])
+            return [embedding]
+
+        # Mock ContextRetrievalService to raise an exception but handle it gracefully
+        async def fake_retrieve_for_pipeline(result, session_uuid):
+            raise Exception("Database connection failed")
+
+        # Mock the context service to catch exceptions and not propagate them
+        context_service_mock = AsyncMock()
+        context_service_mock.retrieve_for_pipeline.side_effect = fake_retrieve_for_pipeline
+        
+        with patch.object(
+            runner.intent_service, "generate_intents",
+            new=AsyncMock(side_effect=fake_generate_intents),
+        ), patch.object(
+            runner.hyde_service, "generate_for_intents",
+            new=AsyncMock(side_effect=fake_generate_for_intents),
+        ), patch.object(
+            runner.retrieval_service, "search",
+            new=AsyncMock(side_effect=fake_search),
+        ), patch.object(
+            runner.embedding_service, "embed_texts",
+            new=AsyncMock(side_effect=fake_embed_texts),
+        ), patch.object(
+            runner, 'context_service', context_service_mock
+        ):
+            try:
+                result = asyncio.run(
+                    runner.run(
+                        query="why do bad things happen",
+                        top_k=5,
+                        translations=("kjv",),
+                    )
+                )
+            finally:
+                runner.close()
+
+        # Pipeline should complete successfully despite context retrieval error
+        self.assertEqual(len(result.traces), 1)
+        trace = result.traces["comfort"]
+        self.assertEqual(len(trace.search_results["kjv"]), 1)
+        
+        # Hits should still exist but may have context_error attached
+        hit = trace.search_results["kjv"][0]
+        # The hit should exist but context_bundle might be missing or have error info
+        self.assertIn("reference", hit)
+        self.assertIn("id", hit)
+
 
 def run_tests():
     """Run the regression tests and report results."""
