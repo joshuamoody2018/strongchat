@@ -209,22 +209,6 @@ class TestAIMessage(unittest.TestCase):
         json_str = aimessage._extract_json(response)
         self.assertEqual(json_str, '{"intent": "question", "confidence": 0.95}')
     
-    def test_serialization(self):
-        """Test AIMessage serialization to/from dict"""
-        aimessage = AIMessage(
-            unique_prompt="Test prompt",
-            raw_response="Test response"
-        )
-        
-        # Convert to dict
-        data = aimessage.to_dict()
-        self.assertEqual(data['unique_prompt'], "Test prompt")
-        self.assertEqual(data['raw_response'], "Test response")
-        
-        # Convert back from dict
-        restored = AIMessage.from_dict(data)
-        self.assertEqual(restored.unique_prompt, aimessage.unique_prompt)
-        self.assertEqual(restored.raw_response, aimessage.raw_response)
 
 
 if __name__ == '__main__':

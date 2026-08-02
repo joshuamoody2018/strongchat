@@ -16,7 +16,7 @@ import sys
 import os
 
 # Add scripts directory to path to import the migration module
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
 
 import migrate_pipeline_message_types as migration
 

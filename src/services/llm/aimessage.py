@@ -4,7 +4,7 @@ import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, Optional, Type
+from typing import Dict, Any, Optional
 from jsonschema import validate, ValidationError
 
 @dataclass
@@ -67,35 +67,6 @@ class AIMessage:
         
         # If no JSON found, assume the entire response is JSON
         return response_text
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert AIMessage to dictionary for database storage"""
-        return {
-            'uuid': self.uuid,
-            'session_uuid': self.session_uuid,
-            'message_type_slug': self.message_type_slug,
-            'unique_prompt': self.unique_prompt,
-            'raw_response': self.raw_response,
-            'created_at': self.created_at.isoformat(),
-            'response_at': self.response_at.isoformat() if self.response_at else None,
-            'num_tries': self.num_tries,
-            'error_text': self.error_text
-        }
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'AIMessage':
-        """Create AIMessage from dictionary"""
-        return cls(
-            uuid=data['uuid'],
-            session_uuid=data.get('session_uuid'),
-            message_type_slug=data.get('message_type_slug', ''),
-            unique_prompt=data.get('unique_prompt', ''),
-            raw_response=data.get('raw_response'),
-            created_at=datetime.fromisoformat(data['created_at']),
-            response_at=datetime.fromisoformat(data['response_at']) if data.get('response_at') else None,
-            num_tries=data.get('num_tries', 1),
-            error_text=data.get('error_text')
-        )
     
     def mark_success(self, response: str):
         """Mark message as successful with response"""
