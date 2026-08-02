@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """CLI runner for the full StrongChat retrieval pipeline.
 
-Orchestrates intent generation → HyDE generation → embedding retrieval
-across requested translations and prints a structured summary.
+Takes a single positional query argument. All other settings (API keys,
+top_k, translations, etc.) come from environment / project config.
 """
 
 import argparse
@@ -17,43 +17,17 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 from services.pipeline import PipelineRunner
 
 
-def _parse_translations(value: str) -> tuple[str, ...]:
-    """Split a comma-separated translation list into a tuple."""
-    return tuple(part.strip() for part in value.split(",") if part.strip())
-
-
 async def main():
     """Run the pipeline and return the shell exit code."""
     parser = argparse.ArgumentParser(
         description="Run the StrongChat intent → HyDE → retrieval pipeline."
     )
     parser.add_argument("query", help="User query to process")
-    parser.add_argument(
-        "--top-k",
-        type=int,
-        default=10,
-        help="Number of nearest neighbors per HyDE document/translation (default: 10)",
-    )
-    parser.add_argument(
-        "--translations",
-        type=str,
-        default="kjv,web",
-        help="Comma-separated translation slugs (default: kjv,web)",
-    )
     args = parser.parse_args()
-
-    translations = _parse_translations(args.translations)
-    if not translations:
-        print("error: at least one translation is required", file=sys.stderr)
-        return 1
 
     runner = PipelineRunner()
     try:
-        result = await runner.run(
-            query=args.query,
-            top_k=args.top_k,
-            translations=translations,
-        )
+        result = await runner.run(query=args.query)
         runner.print_summary(result)
         return 0
     except Exception as exc:  # noqa: BLE001
