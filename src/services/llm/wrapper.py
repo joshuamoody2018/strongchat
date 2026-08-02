@@ -92,32 +92,35 @@ class LLMWrapper:
         
         for attempt in range(max_retries):
             try:
-                # Make API call with formatted prompt
                 raw_response = await self._call_api_async(
                     prompt=formatted_prompt,
                     model=message_type['model_slug'],
                     temperature=message_type['temperature'],
                     additional_settings=message_type['additional_model_settings']
                 )
-                
-                # Mark success
-                aimessage.mark_success(raw_response)
-                
-                # Save successful message to database
+
+                try:
+                    aimessage.mark_success_from_text(
+                        raw_response,
+                        schema=message_type.get('request_schema'),
+                    )
+                except ValueError as parse_error:
+                    raise APIResponseError(str(parse_error)) from parse_error
+
                 await self.db_port.create_message_with_type(
                     session_uuid=session_uuid,
                     message_type_slug=message_type_slug,
                     unique_prompt=unique_prompt,
-                    raw_response=raw_response,
+                    raw_response=aimessage.raw_response,
                     num_tries=aimessage.num_tries
                 )
-                
+
                 return aimessage
-                
-            except (APITimeoutError, APIConnectionError) as e:
+
+            except (APITimeoutError, APIConnectionError, APIResponseError) as e:
                 last_error = e
                 aimessage.mark_failure(str(e), increment_tries=True)
-                
+
                 if attempt < max_retries - 1:
                     backoff_time = min(1.0 * (2 ** attempt), 30.0)
                     logger.warning(f"API call failed, retrying in {backoff_time}s: {e}")
