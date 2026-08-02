@@ -5,10 +5,10 @@ Steps:
   0. Back up the database to <db_path>.pre-pipeline.bak via sqlite3's backup API
      (an existing backup is overwritten).
   1. DELETE the superseded intent_disambiguation and intent_classification rows
-  2. INSERT OR REPLACE the 6 pipeline message-type rows
-     (human_input, llm_response, embedding_generation, corpus_ingest, intent_generation, hyde_generation).
-   3. Upsert context_retrieval using summary schema (not LLM schema).
-   4. Upsert intent_generation and hyde_generation using cheap open-weight models.
+  2. INSERT OR REPLACE the 5 pipeline message-type rows
+     (human_input, embedding_generation, corpus_ingest, intent_generation, hyde_generation).
+  3. Upsert context_retrieval using summary schema (not LLM schema).
+  4. Upsert intent_generation and hyde_generation using cheap open-weight models.
 
 Idempotent: safe to run multiple times against the same database.
 """
@@ -64,15 +64,6 @@ PIPELINE_MESSAGE_TYPES = [
         0.0,
         'Batched embedding generation call record (summary only, never raw vectors)',
     ),
-    (
-        'llm_response',
-        'LLM Response',
-        'llm',
-        '{"type":"object"}',
-        'n/a',
-        0.0,
-        'Assistant response message',
-    ),
 ]
 
 INSERT_SQL = """
@@ -83,7 +74,7 @@ VALUES (?, ?, ?, ?, ?, ?, '{}', 3, 1, ?, NULL)
 """
 
 DELETE_SQL = (
-    "DELETE FROM ref_message_types WHERE slug IN ('intent_disambiguation', 'intent_classification', 'error', 'corpus_ingest')"
+    "DELETE FROM ref_message_types WHERE slug IN ('intent_disambiguation', 'intent_classification', 'error', 'corpus_ingest', 'llm_response')"
 )
 
 INTENT_GENERATION_SQL = """
@@ -165,7 +156,7 @@ def backup_database(db_path: str) -> str:
 
 
 def _seed_rows(conn: sqlite3.Connection) -> None:
-    """Seed all 6 pipeline message types into the database connection."""
+    """Seed all 5 pipeline message types into the database connection."""
     conn.execute(DELETE_SQL)
     conn.executemany(INSERT_SQL, PIPELINE_MESSAGE_TYPES)
     conn.execute(INTENT_GENERATION_SQL, INTENT_GENERATION_ROW)
