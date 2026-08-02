@@ -39,6 +39,11 @@ logs/
 *.db
 *.sqlite
 *.sqlite3
+
+# Runtime data (downloaded corpus, generated DB, vector store)
+data/
+
+# Agent workspace artifacts
 .omo/boulder.json
 .omo/run-continuation/
 .omo/drafts/
