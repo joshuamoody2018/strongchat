@@ -177,6 +177,40 @@ def _create_fixture_db():
                 None,
             ),
         )
+        conn.execute(
+            """
+            INSERT INTO ref_message_types
+              (slug, step_name, creator_type, request_schema, model_slug,
+               temperature, additional_model_settings, max_retries,
+               is_active, description, prompt_template)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "context_retrieval",
+                "Context Retrieval",
+                "programmatic",
+                json.dumps(
+                    {
+                        "type": "object",
+                        "properties": {
+                            "intent_id": {"type": "string"},
+                            "translation_count": {"type": "integer"},
+                            "hit_count": {"type": "integer"},
+                            "scored_word_count": {"type": "integer"},
+                            "kept_word_count": {"type": "integer"},
+                        },
+                        "required": ["intent_id", "translation_count", "hit_count", "scored_word_count", "kept_word_count"],
+                    }
+                ),
+                "n/a",
+                0.0,
+                "{}",
+                3,
+                1,
+                "Per-intent original-language context enrichment for retrieved verses",
+                None,
+            ),
+        )
         conn.commit()
     return tmp, db_path
 
