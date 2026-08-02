@@ -5,9 +5,10 @@ Steps:
   0. Back up the database to <db_path>.pre-pipeline.bak via sqlite3's backup API
      (an existing backup is overwritten).
   1. DELETE the superseded intent_disambiguation and intent_classification rows
-  2. INSERT OR REPLACE the 5 pipeline message-type rows
-     (human_input, llm_response, error, embedding_generation, corpus_ingest).
-  3. Upsert intent_generation and hyde_generation using cheap open-weight models.
+  2. INSERT OR REPLACE the 6 pipeline message-type rows
+     (human_input, llm_response, embedding_generation, corpus_ingest, intent_generation, hyde_generation).
+   3. Upsert context_retrieval using summary schema (not LLM schema).
+   4. Upsert intent_generation and hyde_generation using cheap open-weight models.
 
 Idempotent: safe to run multiple times against the same database.
 """
@@ -121,6 +122,33 @@ HYDE_GENERATION_ROW = (
 )
 
 
+CONTEXT_RETRIEVAL_REQUEST_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "intent_id": {"type": "string"},
+        "translation_count": {"type": "integer"},
+        "hit_count": {"type": "integer"},
+        "scored_word_count": {"type": "integer"},
+        "kept_word_count": {"type": "integer"},
+    },
+    "required": ["intent_id", "translation_count", "hit_count", "scored_word_count", "kept_word_count"],
+}
+
+CONTEXT_RETRIEVAL_ROW = (
+    'context_retrieval',                                          # slug
+    'Context Retrieval',                                          # step_name
+    'programmatic',                                               # creator_type (NOT 'llm')
+    json.dumps(CONTEXT_RETRIEVAL_REQUEST_SCHEMA),                 # request_schema (SUMMARY shape)
+    'n/a',                                                        # model_slug
+    0.0,                                                          # temperature
+    '{}',                                                         # additional_model_settings
+    3,                                                            # max_retries
+    1,                                                            # is_active
+    'Per-intent original-language context enrichment for retrieved verses',  # description
+    None,                                                         # prompt_template (NULL — not an LLM message)
+)
+
+
 def backup_database(db_path: str) -> str:
     """Copy db_path to <db_path>.pre-pipeline.bak, overwriting any prior backup."""
     backup_path = db_path + BACKUP_SUFFIX
@@ -136,6 +164,15 @@ def backup_database(db_path: str) -> str:
     return backup_path
 
 
+def _seed_rows(conn: sqlite3.Connection) -> None:
+    """Seed all 6 pipeline message types into the database connection."""
+    conn.execute(DELETE_SQL)
+    conn.executemany(INSERT_SQL, PIPELINE_MESSAGE_TYPES)
+    conn.execute(INTENT_GENERATION_SQL, INTENT_GENERATION_ROW)
+    conn.execute(INTENT_GENERATION_SQL, HYDE_GENERATION_ROW)
+    conn.execute(INTENT_GENERATION_SQL, CONTEXT_RETRIEVAL_ROW)
+
+
 def migrate(db_path: str) -> str:
     """Back up db_path, seed pipeline message types, drop intent_disambiguation."""
     backup_path = backup_database(db_path)
@@ -143,10 +180,7 @@ def migrate(db_path: str) -> str:
 
     conn = sqlite3.connect(db_path)
     try:
-        conn.execute(DELETE_SQL)
-        conn.executemany(INSERT_SQL, PIPELINE_MESSAGE_TYPES)
-        conn.execute(INTENT_GENERATION_SQL, INTENT_GENERATION_ROW)
-        conn.execute(INTENT_GENERATION_SQL, HYDE_GENERATION_ROW)
+        _seed_rows(conn)
         conn.commit()
 
         rows = conn.execute(
