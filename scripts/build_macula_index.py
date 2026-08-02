@@ -116,7 +116,28 @@ def main():
     conn = sqlite3.connect(args.output_db)
     cursor = conn.cursor()
     
-    # Create table and index
+    # Check if table exists and get its columns
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='macula_tokens'")
+    table_exists = cursor.fetchone()
+    
+    if table_exists:
+        # Table exists - check if it has the gloss column
+        existing_cols = [r[1] for r in cursor.execute("PRAGMA table_info(macula_tokens)").fetchall()]
+        if 'gloss' not in existing_cols:
+            print("Existing schema missing gloss column - adding it and rebuilding from TSV...")
+            cursor.execute("ALTER TABLE macula_tokens ADD COLUMN gloss TEXT")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_macula_ref ON macula_tokens(book_osis, chapter, verse)")
+            conn.commit()
+            # Re-populate the gloss column by reading the canonical TSV.
+            # The TSV is the source of truth; rebuild from it.
+            cursor.execute("DELETE FROM macula_tokens")
+            conn.commit()
+        else:
+            print("Table exists with gloss column - proceeding with normal ingestion")
+    else:
+        print("No existing table - creating fresh schema")
+    
+    # Create table (will be no-op if table already exists)
     create_table_sql = """
     CREATE TABLE IF NOT EXISTS macula_tokens (
         row_id TEXT PRIMARY KEY,
@@ -129,7 +150,8 @@ def main():
         lemma TEXT,
         strongs TEXT,
         morph TEXT,
-        pos TEXT
+        pos TEXT,
+        gloss TEXT
     );
     """
     cursor.execute(create_table_sql)
@@ -173,7 +195,8 @@ def main():
                         row['lemma'],
                         row['strongnumberx'],  # strongs
                         row['morph'],
-                        row['pos']
+                        row['pos'],
+                        row['gloss']  # gloss
                     )
                     rows.append(row_tuple)
                     total_rows += 1
@@ -197,8 +220,8 @@ def main():
                 chunk = rows[i:i + chunk_size]
                 insert_sql = """
                 INSERT OR REPLACE INTO macula_tokens 
-                (row_id, book_num, book_osis, chapter, verse, word_pos, surface, lemma, strongs, morph, pos)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (row_id, book_num, book_osis, chapter, verse, word_pos, surface, lemma, strongs, morph, pos, gloss)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """
                 cursor.executemany(insert_sql, chunk)
                 print(f"Inserted chunk {i//chunk_size + 1}: {len(chunk)} rows")

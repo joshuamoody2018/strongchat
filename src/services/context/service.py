@@ -167,7 +167,7 @@ class ContextRetrievalService(BaseService):
                 'sense_count': sense_count,
                 'composite_score': score,
                 'definitions': [s for s in senses],
-                'gloss': w.get('gloss', ''),  # Use .get() with fallback for missing gloss
+                'gloss': w['gloss'],  # Direct access - gloss should always be present after schema fix
                 'lexicon_source': 'tbESG+LSJ',
                 'macula_occurrences': occurrence_cache.get(strongs, 0),
             })
@@ -203,12 +203,12 @@ class ContextRetrievalService(BaseService):
         self, book_osis: str, chapter: int, verse: int,
     ) -> List[Dict[str, Any]]:
         cur = self._macula_conn.execute(
-            "SELECT surface, lemma, strongs, morph, pos FROM macula_tokens "
+            "SELECT surface, lemma, strongs, morph, pos, gloss FROM macula_tokens "
             "WHERE book_osis=? AND chapter=? AND verse=? ORDER BY word_pos",
             (book_osis, chapter, verse),
         )
         return [
-            {'surface': r[0], 'lemma': r[1], 'strongs': r[2], 'morph': r[3], 'pos': r[4]}
+            {'surface': r[0], 'lemma': r[1], 'strongs': r[2], 'morph': r[3], 'pos': r[4], 'gloss': r[5]}
             for r in cur.fetchall()
         ]
 
