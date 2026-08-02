@@ -25,6 +25,9 @@
 - [ ] Introduce a versioned migration discipline for schema changes
 - [ ] Keep any future database implementation contained behind the existing `DatabasePort` abstraction
 
+## Context Retrieval Tuning Knobs (deferred from context-retrieval plan)
+- [ ] Consider moving the POS weight table from a Python `dict` constant in `src/config/context_constants.py` into a SQLite lookup table (e.g. `pos_weights(pos_code TEXT PRIMARY KEY, weight REAL, category TEXT, updated_at TIMESTAMP)`). **Reasoning for NOT doing this now**: POS codes are fixed morphological categories from the Robinson (Greek) and HAM (Hebrew) standards — they are not tunable parameters but stable linguistic facts. A ~20-entry Python dict is O(1), version-controlled, trivially testable, ships in code review, and needs no schema migration. The deterministic dict matches the existing project convention (`EMBEDDING_ENDPOINT`, `DEFAULT_DIMENSION`, `MAX_BACKOFF` in `src/services/embeddings/service.py:25-29`). An embedded table would add (a) a migration step every time a category is added, (b) drift risk between code and DB, and (c) audit difficulty (DB rows lack git history). Reopen this if: (1) a future plan introduces per-corpus or per-domain overrides, (2) we want to A/B test scoring weights without redeploying, (3) the table grows past ~50 entries, or (4) we add a lexicon-tuning workflow that needs provenance metadata beyond what a code constant can express.
+
 ## Performance Optimizations
 - [ ] Add response caching with TTL
 - [ ] Implement connection pooling for API calls
