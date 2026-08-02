@@ -1,5 +1,12 @@
 # Database Architecture
 
+## Databases
+
+StrongChat uses TWO separate databases:
+
+1. **`data/chat_database.db`** — Chat database for sessions, messages, ref_message_types, and intents
+2. **`data/macula_index.db`** — Macula Greek original-language index (macula_tokens, strongs_frequency, lexicon_definitions)
+
 ## Overview
 
 SQLite database layer for chat sessions, messages, and structured intent storage. Designed for auditability and efficient retrieval.
@@ -30,6 +37,23 @@ CREATE TABLE messages (
 );
 ```
 
+#### ref_message_types Table
+```sql
+CREATE TABLE ref_message_types (
+    slug TEXT PRIMARY KEY,
+    step_name TEXT NOT NULL,
+    creator_type TEXT NOT NULL,  -- 'human', 'llm', or 'programmatic'
+    request_schema TEXT,         -- JSON schema for validation
+    model_slug TEXT,
+    temperature REAL,
+    additional_model_settings TEXT,  -- JSON for model-specific settings
+    max_retries INTEGER DEFAULT 3,
+    is_active INTEGER DEFAULT 1,
+    description TEXT,
+    prompt_template TEXT
+);
+```
+
 #### Intents Table
 ```sql
 CREATE TABLE intents (
@@ -39,6 +63,8 @@ CREATE TABLE intents (
     FOREIGN KEY (message_uuid) REFERENCES messages (uuid)
 );
 ```
+
+**Note**: The `messages` table has a foreign key to `ref_message_types` (the modern pattern). The existing `intents` table may be deprecated as intent data is now stored directly in the `messages` table via the `intent_generation` message type.
 
 ## Data Layer Components
 
@@ -70,6 +96,31 @@ Functions:
 2. **Intent Analysis** → `create_intent()` → Store JSON string in intents table
 3. **AI Response** → `create_message()` → Store output in messages table
 4. **Session Management** → `create_session()` → Track conversation context
+
+## Macula Greek Index (data/macula_index.db)
+
+The Macula Greek index is a separate SQLite database containing original-language data for New Testament Greek:
+
+### macula_tokens Table
+- **Schema**: `row_id INTEGER PRIMARY KEY, book_num INTEGER, book_osis TEXT, chapter INTEGER, verse INTEGER, word_pos INTEGER, surface TEXT, lemma TEXT, strongs TEXT, morph TEXT, pos TEXT`
+- **Content**: 137,741 tokens across 27 NT books from Macula Greek SBLGNT
+- **Source**: `scripts/build_macula_index.py`
+- **License**: CC BY 4.0
+
+### strongs_frequency Table
+- **Schema**: `strongs TEXT PRIMARY KEY, frequency_count INTEGER`
+- **Content**: 5,440 NT Strong's numbers with frequency counts
+- **Source**: `scripts/build_strongs_frequency.py`
+- **Purpose**: Used for scoring in context retrieval
+
+### lexicon_definitions Table
+- **Schema**: `strongs TEXT, sense_id INTEGER, lexicon_source TEXT, definitions TEXT, glosses TEXT`
+- **Content**: ~16,000 senses across TBESG + LSJ lexicons
+- **Source**: `scripts/build_lexicon_index.py`
+- **License**: CC BY 4.0 (TBESG + LSJ)
+
+### Usage
+The context retrieval service queries this database to enrich retrieved verses with original-language data, including lemma, Strong's number, morphological information, and lexicon definitions.
 
 ## Structured Intent Storage
 
@@ -111,7 +162,9 @@ Functions:
 
 - Implementation: `src/services/sqlite/`
 - Database: `data/chat_database.db`
+- Macula Index: `data/macula_index.db`
 - Utilities: `scripts/create_database.py`, `scripts/check_database.py`
+- Macula Scripts: `scripts/download_macula_greek.py`, `scripts/build_macula_index.py`, `scripts/build_strongs_frequency.py`, `scripts/build_lexicon_index.py`
 
 ## Performance Considerations
 

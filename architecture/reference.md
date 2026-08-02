@@ -9,7 +9,8 @@ For new agents, read these documents in order:
 3. **Component-specific docs** as needed:
    - `[llm-framework.md](llm-framework.md)` - LLM interactions
    - `[database.md](database.md)` - Data storage
-   - `[intent-disambiguation.md](intent-disambiguation.md)` - Query analysis
+   - `[pipeline-hyde-retrieval.md](pipeline-hyde-retrieval.md)` - HyDE + retrieval pipeline
+   - `[pipeline-context-retrieval.md](pipeline-context-retrieval.md)` - Context retrieval pipeline
 
 ## Architecture Philosophy
 
@@ -35,12 +36,14 @@ For new agents, read these documents in order:
 
 ```
 architecture/
-├── README.md                    # Main overview (brief)
-├── implementation-status.md     # Current progress
-├── llm-framework.md            # LLM service details
-├── database.md                 # Data layer details
-├── intent-disambiguation.md    # Query analysis service
-└── [future component docs]     # Additional components
+├── README.md                       # Main overview (brief)
+├── high-level.md                   # 13-step pipeline overview
+├── implementation-status.md       # Current progress tracking
+├── reference.md                    # This document
+├── llm-framework.md               # LLM service details
+├── database.md                    # Data layer + Macula index
+├── pipeline-hyde-retrieval.md      # HyDE + retrieval pipeline
+└── pipeline-context-retrieval.md   # Context retrieval pipeline (NT original-language)
 ```
 
 ## Key Integration Points
@@ -55,23 +58,50 @@ architecture/
 - **Integration**: All stateful operations
 - **Status**: ✅ Complete and tested
 
-### 3. Intent Disambiguation
+### 3. Intent Generation Service
 - **Purpose**: Query analysis (Pipeline Step 2)
 - **Integration**: Main application → Intent service → LLM framework
-- **Status**: 🚧 Framework ready, service in progress
+- **Status**: ✅ Complete and tested
+
+### 4. HyDE Generation Service
+- **Purpose**: Hypothetical document generation (Pipeline Step 3)
+- **Integration**: Intent service → HyDE service → LLM framework
+- **Status**: ✅ Complete and tested
+
+### 5. Embeddings Service
+- **Purpose**: Batched embedding generation
+- **Integration**: HyDE documents → Embeddings → Retrieval
+- **Status**: ✅ Complete and tested
+
+### 6. Verse Store / Retrieval Service
+- **Purpose**: Bible verse storage and retrieval
+- **Integration**: HyDE embeddings → ChromaDB → Retrieved verses
+- **Status**: ✅ Complete and tested
+
+### 7. Context Retrieval Service
+- **Purpose**: Original-language data enrichment (Pipeline Steps 7, 9)
+- **Integration**: Retrieved verses → Macula lookup → Scoring → Bundling
+- **Status**: ✅ Complete and tested
+
+### 8. Pipeline Orchestrator
+- **Purpose**: Compose all services into runnable pipeline
+- **Integration**: All services → Pipeline runner → CLI
+- **Status**: ✅ Complete and tested
 
 ## Pipeline Context
 
 ### Current Implementation
-- **Steps implemented**: 1 (input), partial 2 (intent framework)
-- **Steps planned**: 3-13 (HyDE through response)
+- **Steps implemented**: 7/13 (input, intent generation, HyDE generation, retrieval, Macula lookup, context retrieval, re-rank/organize)
+- **Steps planned**: 5-6 (RRF), 8 (graph expansion), 10-13 (synthesis through response)
 - **Architecture ready**: Framework supports full pipeline
 
 ### Next Integration Points
-1. Intent service completion
-2. HyDE service development
-3. RRF algorithm implementation
-4. Macula data integration
+1. RRF algorithm implementation (steps 5-6)
+2. Graph expansion (step 8)
+3. Response synthesis (step 10)
+4. Evaluator loop (step 11)
+5. Fact validation (step 12)
+6. Final response (step 13)
 
 ## Agent Workflow
 

@@ -111,14 +111,7 @@
   - Cross-intent merging (step 6)
   - Score normalization and fusion
 
-#### 2. Macula Integration
-- **Status**: 📋 Planned
-- **Requirements**:
-  - NT: Macula Greek lookup (step 7)
-  - OT: Macula Hebrew lookup (TBD)
-  - Strong's concordance integration
-
-#### 3. Synthesis, Evaluation, and Validation
+#### 2. Synthesis, Evaluation, and Validation
 - **Status**: 📋 Planned
 - **Requirements**:
   - Response synthesis (step 10)
@@ -190,7 +183,7 @@
 ### Technical Metrics
 - ✅ Framework test coverage: 100%
 - ✅ Integration test coverage: live pipeline end-to-end passing
-- ✅ Pipeline step completion: 4/13 implemented (input, intent generation, HyDE generation, retrieval)
+- ✅ Pipeline step completion: 7/13 implemented (input, intent generation, HyDE generation, retrieval, Macula lookup, context retrieval, re-rank/organize)
 
 ### Functional Metrics
 - ✅ Database operations: All working
@@ -198,6 +191,7 @@
 - ✅ HyDE generation: Working and audited
 - ✅ Embeddings: Working and audited
 - ✅ Retrieval: Working and audited
+- ✅ Context retrieval: Working and audited
 - 📋 End-to-end synthesis: In progress
 
 ## Next Milestones
@@ -207,9 +201,10 @@
 2. Update retrieval service to feed ranked results into synthesis
 
 ### Medium Term (1-2 months)
-1. Add Macula integration (step 7)
-2. Implement response synthesis (step 10)
-3. Add evaluator loop (step 11)
+1. Implement response synthesis (step 10)
+2. Add evaluator loop (step 11)
+3. Add fact validation (step 12)
+4. Implement final response (step 13)
 
 ### Long Term (3-6 months)
 1. Complete full pipeline integration (steps 5-13)

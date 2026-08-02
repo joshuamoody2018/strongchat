@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Idempotent local development environment bootstrap for StrongChat.
 # Installs system dependencies, creates a Python .venv, installs requirements,
-# and creates/seeds the local SQLite database.
+# creates the chat DB, downloads and ingests the Macula Greek corpus + STEPBible TBESG/LSJ lexicons,
+# and runs pipeline message-type migrations.
 
 set -euo pipefail
 
@@ -93,5 +94,24 @@ log "Seeding message types..."
 "$PYTHON" scripts/populate_message_types.py --db-path "$DB_PATH"
 "$PYTHON" scripts/migrate_pipeline_message_types.py --db-path "$DB_PATH"
 
+log "Downloading Macula Greek corpus (Clear-Bible/macula-greek, CC BY 4.0)..."
+if [ ! -f data/macula/macula-greek.tsv ]; then
+    log "Downloading Macula Greek corpus (Clear-Bible/macula-greek, CC BY 4.0)..."
+    .venv/bin/python scripts/download_macula_greek.py
+else
+    log "Macula Greek corpus already present at data/macula/macula-greek.tsv; skipping download."
+fi
+
+log "Building Macula Greek SQLite index..."
+if ! .venv/bin/python -c "import sqlite3; c = sqlite3.connect('data/macula_index.db'); n = c.execute('SELECT COUNT(*) FROM macula_tokens').fetchone()[0]; import sys; sys.exit(0 if n > 0 else 1)" 2>/dev/null; then
+    log "Building Macula Greek SQLite index..."
+    .venv/bin/python scripts/build_macula_index.py
+    .venv/bin/python scripts/build_strongs_frequency.py
+    .venv/bin/python scripts/build_lexicon_index.py
+else
+    log "Macula index already populated; skipping build."
+fi
+
 log "Environment setup complete."
+log "Macula data + lexicons ingested. To re-run: delete data/macula_index.db or data/macula/macula-greek.tsv and re-run this script."
 log "Activate the virtual environment with: source $VENV_DIR/bin/activate"
