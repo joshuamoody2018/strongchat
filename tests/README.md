@@ -55,11 +55,9 @@ Standalone script-style tests for services and components. Run each file directl
   - Validate HyDE schema and service behavior
 - **Intent Tests** (`test_intent_schema.py`, `test_intent_service.py`)
   - Validate intent schema and service behavior
-- **LLM Framework Tests** (`test_llm_framework.py`, `test_parser.py`)
-  - Exercise the LLM client, parser, and framework utilities
 - **Migration Tests** (`test_migration.py`)
   - Verify database migration logic
-- **Pipeline Tests** (`test_pipeline_offline.py`)
+- **Pipeline Tests** (`test_pipeline_offline.py`, `test_pipeline_result_traces.py`)
   - Run offline pipeline validation
 - **Retrieval Tests** (`test_retrieval_service.py`)
   - Validate retrieval service behavior
@@ -183,7 +181,7 @@ These tests are designed to run in CI environments:
 
 When adding new message types or pipeline steps:
 
-1. **Add to ref_message_types table**: Update `populate_message_types.py` or `migrate_pipeline_message_types.py`
+1. **Add to ref_message_types table**: Update `migrate_pipeline_message_types.py`
 2. **Create test scenario**: Add to appropriate test file
 3. **Verify integration**: Test complete workflow
 4. **Document**: Update this README with new test patterns

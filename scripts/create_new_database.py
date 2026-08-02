@@ -6,7 +6,7 @@ import sqlite3
 
 
 def create_new_database(db_path: str = 'data/chat_database.db') -> None:
-    """Create database with new schema. Seeding is populate_message_types.py's job."""
+    """Create database with new schema. Seeding is migrate_pipeline_message_types.py's job."""
 
     # Drop existing tables if they exist
     conn = sqlite3.connect(db_path)
