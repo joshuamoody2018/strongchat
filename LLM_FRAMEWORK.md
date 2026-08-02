@@ -169,8 +169,7 @@ async def generate(query: str, session_uuid: str) -> str | None:
       "confidence": 0.0-1.0,
       "is_primary": true
     }
-  ],
-  "recommended_search_approach": "string"
+  ]
 }
 ```
 

@@ -146,8 +146,7 @@ The context retrieval service queries this database to enrich retrieved verses w
       "confidence": 0.9,
       "is_primary": true
     }
-  ],
-  "recommended_search_approach": "Prioritize the primary intent"
+  ]
 }
 ```
 

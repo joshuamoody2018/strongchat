@@ -28,7 +28,6 @@ All LLM and embedding calls are recorded as rows in the `messages` table, linked
 - `INTENT_GENERATION_SCHEMA` (`src/config/schemas.py`)
   - `query_analysis`: `original_query`, `core_questions`, `context_clues`
   - `intents`: 1-5 items, each with `intent_id`, `interpretation`, `keywords_explicit`, `keywords_inferred`, `themes`, `confidence`, `is_primary`
-  - `recommended_search_approach`
 
 - `HYDE_GENERATION_SCHEMA` (`src/config/schemas.py`)
   - Single property: `hyde_document` (string, `minLength: 50`)
@@ -43,7 +42,7 @@ All services inherit from `BaseService` (`src/services/base.py`), which provides
 
 ```python
 async def generate_intents(self, query: str, session_uuid: str) -> dict:
-    """Return message_uuid, query_analysis, intents, recommended_search_approach."""
+    """Return message_uuid, query_analysis, intents."""
 ```
 
 - Calls `intent_generation` through `LLMWrapper`.

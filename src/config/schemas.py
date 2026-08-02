@@ -54,13 +54,9 @@ INTENT_CLASSIFICATION_SCHEMA = {
             },
             "minItems": 1,
             "maxItems": 5
-        },
-        "recommended_search_approach": {
-            "type": "string",
-            "description": "Recommended approach for combining multiple intents"
         }
     },
-    "required": ["query_analysis", "intents", "recommended_search_approach"]
+    "required": ["query_analysis", "intents"]
 }
 
 INTENT_GENERATION_SCHEMA = {
@@ -127,13 +123,9 @@ INTENT_GENERATION_SCHEMA = {
             },
             "minItems": 1,
             "maxItems": 5
-        },
-        "recommended_search_approach": {
-            "type": "string",
-            "description": "Recommended approach for combining or prioritizing generated intents"
         }
     },
-    "required": ["query_analysis", "intents", "recommended_search_approach"]
+    "required": ["query_analysis", "intents"]
 }
 
 HYDE_GENERATION_SCHEMA = {

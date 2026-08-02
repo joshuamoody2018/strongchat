@@ -121,8 +121,7 @@ asyncio.run(main())
       "confidence": 0.0-1.0,
       "is_primary": true
     }
-  ],
-  "recommended_search_approach": "string"
+  ]
 }
 ```
 

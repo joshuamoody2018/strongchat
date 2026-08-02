@@ -71,8 +71,6 @@ def test_real_api_with_json():
                         print(f"     Keywords: {intent.get('keywords', [])}")
                         print(f"     Framing: {intent.get('framing', {})}")
                     
-                    print(f"\n   Recommended Search: {parsed_response.get('recommended_search_approach', 'N/A')}")
-                    
                     # Verify schema compliance
                     schema = intent_config["request_schema"]
                     required_fields = schema['required']

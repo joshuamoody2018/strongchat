@@ -42,7 +42,6 @@ VALID_FIXTURE = {
             "is_primary": False,
         },
     ],
-    "recommended_search_approach": "Prioritize the primary intent, then include supporting verses",
 }
 
 

@@ -48,7 +48,6 @@ VALID_FIXTURE = {
             "is_primary": False,
         },
     ],
-    "recommended_search_approach": "Prioritize the primary intent, then include supporting verses",
 }
 
 
@@ -69,7 +68,6 @@ INVALID_FIXTURE = {
             "is_primary": True,
         },
     ],
-    "recommended_search_approach": "Prioritize the primary intent, then include supporting verses",
 }
 
 
@@ -105,10 +103,6 @@ class TestIntentService(unittest.TestCase):
         self.assertEqual(result['message_uuid'], 'test-message-uuid')
         self.assertEqual(result['query_analysis'], VALID_FIXTURE['query_analysis'])
         self.assertEqual(result['intents'], VALID_FIXTURE['intents'])
-        self.assertEqual(
-            result['recommended_search_approach'],
-            VALID_FIXTURE['recommended_search_approach'],
-        )
         mock_call_api.assert_awaited_once_with(*expected_call)
 
     def test_generate_intents_invalid_response_raises_value_error(self):

@@ -23,9 +23,8 @@ Response format:
       "keywords": ["kw1", "kw2", "kw3"],
       "confidence": 0.9,
       "is_primary": true
-    }}
-  ],
-  "recommended_search_approach": "approach description"
+    }]
+  ]
 }}"""
 
 INTENT_GENERATION_PROMPT = """Analyze the following user query.
@@ -70,8 +69,7 @@ Response format:
       "confidence": 0.6,
       "is_primary": false
     }}
-  ],
-  "recommended_search_approach": "brief description"
+  ]
 }}"""
 
 HYDE_GENERATION_PROMPT = """You are given exactly one intent, serialized as JSON, that captures an interpretation of a user's question, along with keywords and themes.

@@ -59,8 +59,6 @@ def test_final_system():
                             print(f"   Keywords: {first_intent.get('keywords', [])[:3]}...")
                             print(f"   Framing: {first_intent.get('framing', {})}")
                         
-                        print(f"   Search Approach: {parsed_response.get('recommended_search_approach', 'N/A')}")
-                        
                         # Schema validation
                         schema = intent_config["request_schema"]
                         required_fields = schema['required']

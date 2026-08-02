@@ -96,9 +96,8 @@ def _create_fixture_db():
                     "properties": {
                         "query_analysis": {"type": "object"},
                         "intents": {"type": "array"},
-                        "recommended_search_approach": {"type": "string"},
                     },
-                    "required": ["query_analysis", "intents", "recommended_search_approach"],
+                    "required": ["query_analysis", "intents"],
                 }),
                 "meta-llama/llama-3.3-70b-instruct",
                 0.2,
@@ -258,7 +257,6 @@ class TestContextRetrievalOffline(unittest.TestCase):
             "message_uuid": "intent-msg-1",
             "query_analysis": {"original_query": "test query", "core_questions": ["test"]},
             "intents": intents,
-            "recommended_search_approach": "hyde_then_search",
         }
 
         # Track context service calls

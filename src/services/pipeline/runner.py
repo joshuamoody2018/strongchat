@@ -70,15 +70,12 @@ class PipelineResult:
         traces: Dict of ``intent_id`` -> :class:`IntentTrace`.
         query_analysis: Surfaced from ``IntentService`` (was previously
             computed but dropped before reaching the result).
-        recommended_search_approach: Surfaced from ``IntentService`` (was
-            previously computed but dropped before reaching the result).
     """
 
     session_uuid: str
     query: str
     traces: Dict[str, IntentTrace] = field(default_factory=dict)
     query_analysis: Dict[str, Any] = field(default_factory=dict)
-    recommended_search_approach: str = ""
 
     @property
     def intents(self) -> List[Dict[str, Any]]:
@@ -178,7 +175,6 @@ class PipelineRunner(BaseService):
         return {
             'query_analysis': intent_response['query_analysis'],
             'intents': intent_response['intents'],
-            'recommended_search_approach': intent_response['recommended_search_approach'],
         }
 
     async def run(
@@ -202,9 +198,8 @@ class PipelineRunner(BaseService):
 
         Returns:
             ``PipelineResult`` containing the session UUID, a per-intent
-            ``traces`` dict, the original ``query_analysis`` and
-            ``recommended_search_approach`` from ``IntentService``, plus
-            backward-compatible flat list views.
+            ``traces`` dict, the original ``query_analysis`` from
+            ``IntentService``, plus backward-compatible flat list views.
         """
         session_uuid = self.db.create_session(
             name=f"pipeline: {query[:60]}",
@@ -217,9 +212,6 @@ class PipelineRunner(BaseService):
         )
         intents = intent_response["intents"]
         query_analysis = intent_response.get("query_analysis", {})
-        recommended_search_approach = intent_response.get(
-            "recommended_search_approach", ""
-        )
 
         traces: Dict[str, IntentTrace] = {}
         for intent in intents:
@@ -268,7 +260,6 @@ class PipelineRunner(BaseService):
             query=query,
             traces=traces,
             query_analysis=query_analysis,
-            recommended_search_approach=recommended_search_approach,
         )
 
         # Stage 5: Context retrieval — attach original-language bundles to each hit.

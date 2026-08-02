@@ -72,7 +72,7 @@ def test_real_api():
                         for i, intent in enumerate(parsed_response['intents']):
                             print(f"     {i+1}. {intent.get('intent_id')} (primary: {intent.get('is_primary')})")
                     
-                    print(f"\n   Recommended Search: {parsed_response.get('recommended_search_approach', 'N/A')}")
+
                 else:
                     print("\n   ✗ Response parsing failed - no valid JSON found")
             except Exception as e:

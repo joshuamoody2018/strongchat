@@ -12,8 +12,8 @@ refactor. They assert:
     the intent still appears in ``traces`` (no silent disappearance).
   * Backward-compatibility list views (``intents``, ``hyde_docs``,
     ``results``) still match the pre-refactor flat shape byte-for-byte.
-  * ``query_analysis`` and ``recommended_search_approach`` from
-    ``IntentService`` are surfaced on ``PipelineResult``.
+  * ``query_analysis`` from ``IntentService`` is surfaced on
+    ``PipelineResult``.
   * ``trace.search_results[translation]`` returns hits for that translation.
 
 All tests run offline (no OpenRouter API calls) by mocking the
@@ -270,17 +270,15 @@ class TestPipelineResultShape(unittest.TestCase):
         self.assertEqual(t.embedding, [0.1, 0.2, 0.3])
         self.assertEqual(t.search_results["kjv"][0]["reference"], "John 3:16")
 
-    def test_query_analysis_and_approach_surfaced(self):
-        """PipelineResult surfaces query_analysis and recommended_search_approach."""
+    def test_query_analysis_surfaced(self):
+        """PipelineResult surfaces query_analysis from IntentService."""
         result = PipelineResult(
             session_uuid="sess-1",
             query="why",
             traces={},
             query_analysis={"original_query": "why"},
-            recommended_search_approach="hyde_then_search",
         )
         self.assertEqual(result.query_analysis["original_query"], "why")
-        self.assertEqual(result.recommended_search_approach, "hyde_then_search")
 
 
 class TestBackwardCompatProperties(unittest.TestCase):
@@ -405,7 +403,6 @@ class TestPipelineRunnerPopulatesTraces(unittest.TestCase):
             "message_uuid": "intent-msg-1",
             "query_analysis": {"original_query": "why", "core_questions": ["why"]},
             "intents": intents,
-            "recommended_search_approach": "hyde_then_search",
         }
 
         runner = self._make_runner()
@@ -455,9 +452,6 @@ class TestPipelineRunnerPopulatesTraces(unittest.TestCase):
         self.assertEqual(
             result.query_analysis["original_query"], "why"
         )
-        self.assertEqual(
-            result.recommended_search_approach, "hyde_then_search"
-        )
 
         # Traces dict has the one intent keyed by intent_id.
         self.assertIsInstance(result.traces, dict)
@@ -498,7 +492,6 @@ class TestPipelineRunnerPopulatesTraces(unittest.TestCase):
             "message_uuid": "intent-msg-1",
             "query_analysis": {"original_query": "why"},
             "intents": intents,
-            "recommended_search_approach": "hyde_then_search",
         }
         embedding = _deterministic_vector("hyde text")
         # RetrievalService skips docs with hyde_document=None, so only comfort
@@ -609,7 +602,6 @@ class TestPipelineRunnerPopulatesTraces(unittest.TestCase):
             "message_uuid": "intent-msg-1",
             "query_analysis": {"original_query": "why", "core_questions": ["why"]},
             "intents": intents,
-            "recommended_search_approach": "hyde_then_search",
         }
 
         runner = self._make_runner()
@@ -704,7 +696,6 @@ class TestPipelineRunnerPopulatesTraces(unittest.TestCase):
             "message_uuid": "intent-msg-1",
             "query_analysis": {"original_query": "why", "core_questions": ["why"]},
             "intents": intents,
-            "recommended_search_approach": "hyde_then_search",
         }
 
         runner = self._make_runner()

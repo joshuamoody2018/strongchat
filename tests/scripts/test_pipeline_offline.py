@@ -234,7 +234,6 @@ def _intent_fixture():
                 "is_primary": True,
             },
         ],
-        "recommended_search_approach": "Prioritize the primary intent",
     }
 
 

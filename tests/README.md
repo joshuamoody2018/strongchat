@@ -126,8 +126,7 @@ MOCK_RESPONSES = {
     },
     "intent_generation": {
         "query_analysis": {...},
-        "intents": [...],
-        "recommended_search_approach": "approach"
+        "intents": [...]
     }
 }
 ```
