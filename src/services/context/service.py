@@ -72,6 +72,7 @@ class ContextRetrievalService(BaseService):
             hit_count = 0
             scored_word_count = 0
             kept_word_count = 0
+            bundles: List[Dict[str, Any]] = []
 
             for translation, hits in trace.search_results.items():
                 translation_count += 1
@@ -79,6 +80,7 @@ class ContextRetrievalService(BaseService):
                     hit_count += 1
                     bundle = await self._build_bundle_for_hit(hit, translation)
                     hit['context_bundle'] = bundle
+                    bundles.append(bundle)
                     scored_word_count += bundle['scored_word_count']
                     kept_word_count += bundle['kept_word_count']
 
@@ -89,11 +91,15 @@ class ContextRetrievalService(BaseService):
                 'scored_word_count': scored_word_count,
                 'kept_word_count': kept_word_count,
             }
+            raw_payload = {
+                'intent_id': intent_id,
+                'bundles': bundles,
+            }
             await self.record_message(
                 message_type_slug='context_retrieval',
                 unique_prompt=json.dumps(summary),
                 session_uuid=session_uuid,
-                raw_response=None,
+                raw_response=json.dumps(raw_payload),
                 error_text=None,
                 num_tries=1,
             )

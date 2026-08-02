@@ -208,10 +208,10 @@ class TestContextRetrievalService(unittest.TestCase):
         """Test that context_retrieval message is recorded in database."""
         # Create test pipeline result
         result = self._create_pipeline_result_with_john_3_16()
-        
+
         # Run the service
         asyncio.run(self.service.retrieve_for_pipeline(result, self.session_uuid))
-        
+
         # Check that context_retrieval message was recorded
         conn = sqlite3.connect(self.chat_db_path)
         cursor = conn.cursor()
@@ -220,21 +220,38 @@ class TestContextRetrievalService(unittest.TestCase):
         )
         messages = cursor.fetchall()
         conn.close()
-        
+
         # Should have exactly one context_retrieval message
         self.assertEqual(len(messages), 1)
-        
-        # Verify message content
+
+        # Column order: uuid=0, session_uuid=1, message_type_slug=2,
+        # unique_prompt=3, raw_response=4, created_at=5, response_at=6,
+        # num_tries=7, error_text=8.
         message = messages[0]
-        print(f"Message: {message}")  # Debug: print the full message
-        parsed_prompt = json.loads(message[3] if message[3] else '{}')  # unique_prompt (index 3, not 2)
-        
+        unique_prompt = message[3]
+        raw_response = message[4]
+        error_text = message[8]
+
+        # unique_prompt keeps the cheap summary shape
+        parsed_prompt = json.loads(unique_prompt) if unique_prompt else {}
         self.assertEqual(parsed_prompt['intent_id'], 'test-intent')
         self.assertEqual(parsed_prompt['translation_count'], 2)
         self.assertEqual(parsed_prompt['hit_count'], 2)
         self.assertGreater(parsed_prompt['scored_word_count'], 0)
         self.assertGreater(parsed_prompt['kept_word_count'], 0)
-        self.assertIsNone(message[6])  # error_text should be NULL
+        self.assertIsNone(error_text)
+
+        # raw_response now carries the full per-hit bundles for replay
+        self.assertIsNotNone(raw_response)
+        parsed_response = json.loads(raw_response)
+        self.assertEqual(parsed_response['intent_id'], 'test-intent')
+        self.assertIsInstance(parsed_response['bundles'], list)
+        self.assertEqual(len(parsed_response['bundles']), parsed_prompt['hit_count'])
+        for bundle in parsed_response['bundles']:
+            self.assertIn('reference', bundle)
+            self.assertIn('translation', bundle)
+            self.assertIn('scored_words', bundle)
+            self.assertIn('kept_words', bundle)
 
     def test_numbered_book_parsing(self):
         """Test numbered book reference parsing."""
