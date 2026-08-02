@@ -331,11 +331,17 @@ class TestContextRetrievalOffline(unittest.TestCase):
                         'scored_word_count': 15,  # Mock value
                         'kept_word_count': 9,    # Mock value
                     }
+                    bundles = [
+                        hit['context_bundle']
+                        for hits in trace.search_results.values()
+                        for hit in hits
+                    ]
+                    raw_payload = {'intent_id': intent_id, 'bundles': bundles}
                     await self.runner.context_service.record_message(
                         message_type_slug='context_retrieval',
                         unique_prompt=json.dumps(summary),
                         session_uuid=session_uuid,
-                        raw_response=None,
+                        raw_response=json.dumps(raw_payload),
                         error_text=None,
                         num_tries=1,
                     )
