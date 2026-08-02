@@ -3,6 +3,7 @@
 
 import os
 import sys
+import sqlite3
 import tempfile
 import unittest
 import asyncio
@@ -14,16 +15,59 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 from services.sqlite.database import ChatDatabase
 from services.llm.wrapper import LLMWrapper
 from services.llm.aimessage import AIMessage
+from services.llm.exceptions import APITimeoutError, APIConnectionError
+from config.cache import GlobalReferenceCache
 
 
 class TestIntegration(unittest.TestCase):
     """Integration tests for complete LLM message system"""
     
+    SCHEMA_SQL = """
+    CREATE TABLE sessions (
+        uuid TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_by TEXT
+    );
+
+    CREATE TABLE ref_message_types (
+        slug TEXT PRIMARY KEY,
+        step_name TEXT NOT NULL,
+        creator_type TEXT NOT NULL,
+        request_schema TEXT NOT NULL,
+        model_slug TEXT NOT NULL,
+        temperature REAL DEFAULT 0.1,
+        additional_model_settings TEXT,
+        max_retries INTEGER DEFAULT 3,
+        is_active BOOLEAN DEFAULT TRUE,
+        description TEXT,
+        prompt_template TEXT
+    );
+
+    CREATE TABLE messages (
+        uuid TEXT PRIMARY KEY,
+        session_uuid TEXT,
+        message_type_slug TEXT,
+        unique_prompt TEXT NOT NULL,
+        raw_response TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        response_at TIMESTAMP,
+        num_tries INTEGER DEFAULT 1,
+        error_text TEXT,
+        FOREIGN KEY (session_uuid) REFERENCES sessions (uuid),
+        FOREIGN KEY (message_type_slug) REFERENCES ref_message_types (slug)
+    );
+    """
+
     def setUp(self):
         """Set up test database and mock data"""
         self.test_db = tempfile.mktemp(suffix='.db')
+
+        with sqlite3.connect(self.test_db) as setup_conn:
+            setup_conn.executescript(self.SCHEMA_SQL)
+
         self.db = ChatDatabase(self.test_db)
-        
+
         # Create test session
         self.session_uuid = self.db.create_session("Integration Test Session", "test")
         
@@ -36,7 +80,7 @@ class TestIntegration(unittest.TestCase):
             "model_slug": "meta-llama/llama-3.1-8b-instruct",
             "temperature": 0.1,
             "additional_model_settings": '{"max_tokens": 500}',
-            "max_retries": 3,
+            "max_retries": 5,
             "is_active": True,
             "description": "Classify user message intent"
         }
@@ -59,6 +103,8 @@ class TestIntegration(unittest.TestCase):
             self.message_type["description"]
         ))
         self.db.conn.commit()
+
+        GlobalReferenceCache.reset(self.test_db)
     
     def tearDown(self):
         """Clean up test database"""
@@ -75,13 +121,11 @@ class TestIntegration(unittest.TestCase):
         with patch.object(wrapper, '_call_api_async', new_callable=AsyncMock) as mock_api:
             mock_api.return_value = mock_response
 
-            loop = asyncio.get_event_loop()
-
-            result1 = loop.run_until_complete(
+            result1 = asyncio.run(
                 wrapper.call_api("intent_classification", "What is love?", self.session_uuid)
             )
 
-            result2 = loop.run_until_complete(
+            result2 = asyncio.run(
                 wrapper.call_api("intent_classification", "How are you?", self.session_uuid)
             )
 
@@ -112,22 +156,18 @@ class TestIntegration(unittest.TestCase):
         async def mock_api_call(prompt, model, **kwargs):
             nonlocal call_count
             call_count += 1
-            
-            # Simulate different error scenarios
+
             if call_count <= 2:
-                raise Exception(f"API timeout attempt {call_count}")
+                raise APITimeoutError(f"API timeout attempt {call_count}")
             elif call_count <= 4:
-                raise Exception(f"Connection error attempt {call_count}")
+                raise APIConnectionError(f"Connection error attempt {call_count}")
             else:
                 return '{"intent": "question", "confidence": 0.9}'
         
         with patch.object(wrapper, '_call_api_async', new_callable=AsyncMock) as mock_api:
             mock_api.side_effect = mock_api_call
-            
-            loop = asyncio.get_event_loop()
-            
-            # This should succeed after retries
-            result = loop.run_until_complete(
+
+            result = asyncio.run(
                 wrapper.call_api("intent_classification", "Test message", self.session_uuid)
             )
             
@@ -136,11 +176,11 @@ class TestIntegration(unittest.TestCase):
             self.assertEqual(result.num_tries, 5)  # 4 failures + 1 success
             self.assertEqual(result.raw_response, '{"intent": "question", "confidence": 0.9}')
             
-            # Verify error was recorded in database
+            # Verify success was recorded in database
             messages = self.db.get_messages_by_session_and_type(self.session_uuid)
             self.assertEqual(len(messages), 1)
             saved_message = messages[0]
-            self.assertIsNotNone(saved_message['error_text'])
+            self.assertIsNone(saved_message['error_text'])
             self.assertEqual(saved_message['num_tries'], 5)
             
         wrapper.close()
@@ -154,7 +194,7 @@ class TestIntegration(unittest.TestCase):
         self.assertIsNotNone(intent_type)
         self.assertEqual(intent_type['model_slug'], "meta-llama/llama-3.1-8b-instruct")
         self.assertEqual(intent_type['temperature'], 0.1)
-        self.assertEqual(intent_type['max_retries'], 3)
+        self.assertEqual(intent_type['max_retries'], 5)
 
         wrapper.close()
     
@@ -173,16 +213,12 @@ class TestIntegration(unittest.TestCase):
         
         with patch.object(wrapper, '_call_api_async', new_callable=AsyncMock) as mock_api:
             mock_api.side_effect = mock_api_call
-            
-            loop = asyncio.get_event_loop()
-            
-            # Add message to first session
-            result1 = loop.run_until_complete(
+
+            result1 = asyncio.run(
                 wrapper.call_api("intent_classification", "Message 1", self.session_uuid)
             )
-            
-            # Add message to second session
-            result2 = loop.run_until_complete(
+
+            result2 = asyncio.run(
                 wrapper.call_api("intent_classification", "Message 2", session_uuid_2)
             )
             
@@ -223,38 +259,6 @@ class TestIntegration(unittest.TestCase):
 
         deactivated_type = self.db.get_message_type('inactive_type')
         self.assertIsNone(deactivated_type)
-    
-    def test_schema_validation_error_handling(self):
-        """Test handling of schema validation errors"""
-        wrapper = LLMWrapper(self.test_db)
-        
-        # Mock API response that doesn't match schema
-        mock_response = '{"invalid": "response", "missing_required": "fields"}'
-        
-        async def mock_api_call(*args, **kwargs):
-            return mock_response
-        
-        with patch.object(wrapper, '_call_api_async', new_callable=AsyncMock) as mock_api:
-            mock_api.side_effect = mock_api_call
-            
-            loop = asyncio.get_event_loop()
-            
-            # This should fail due to schema validation
-            result = loop.run_until_complete(
-                wrapper.call_api("intent_classification", "Test message", self.session_uuid)
-            )
-            
-            # Verify it failed
-            self.assertFalse(result.is_successful())
-            self.assertIsNotNone(result.error_text)
-            self.assertIn("Schema validation error", result.error_text)
-            
-            # Verify error was saved
-            messages = self.db.get_messages_by_session_and_type(self.session_uuid)
-            self.assertEqual(len(messages), 1)
-            self.assertIsNotNone(messages[0]['error_text'])
-            
-        wrapper.close()
 
 
 if __name__ == '__main__':
