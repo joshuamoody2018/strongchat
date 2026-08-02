@@ -46,7 +46,6 @@ def parse_tsv_content(content, expected_columns):
     
     # Get header line
     header = lines[header_line_idx].strip().split('\t')
-    print(f"Parsed header: {header}")
     
     # Find the start of data (after "===============================================================================")
     data_start = None
@@ -222,10 +221,6 @@ def main():
     if tb_content:
         try:
             header, data_rows = parse_tsv_content(tb_content, ['eStrong', 'Gloss'])
-            print(f"TBESG header: {header}")
-            print(f"TBESG data rows count: {len(data_rows)}")
-            if data_rows:
-                print(f"First data row: {data_rows[0]}")
             # Map column names to expected names
             processed_rows = []
             for row in data_rows:
@@ -234,7 +229,6 @@ def main():
                         row[header.index('eStrong')],  # strongs_number
                         row[header.index('Gloss')]     # definition
                     ])
-            print(f"Processed rows count: {len(processed_rows)}")
             # Create a temporary header for processing
             temp_header = ['strongs', 'definition']
             process_lexicon_data(temp_header, processed_rows, 'tbESG', conn, definition_col='Gloss')
