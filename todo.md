@@ -28,66 +28,37 @@
 - [ ] Implement fallback logic for parsing failures
 - [ ] Update main.py to use new LLM client
 
-### Phase 5: Expand Framework
-- [x] Add HYDE_GENERATION_SCHEMA and prompt
-- [ ] Add RESPONSE_SYNTHESIS_SCHEMA and prompt
-- [ ] Create additional response models for different pipeline steps
-- [x] Implement model routing (cheap intent model vs expensive HyDE model)
-- [x] Add EmbeddingService for batched OpenRouter embeddings
-- [x] Add RetrievalService for HyDE → Chroma verse search
-- [x] Add PipelineRunner orchestrator and CLI runner
+### Phase 6: Context Retrieval ✅
+- [x] 1. Add context_constants module with POS weight table and scoring formula
+- [x] 2. Download Macula Greek tokens and validate shape
+- [x] 3. Build Macula Greek index SQLite table
+- [x] 4. Compute Strong's frequency table from Macula
+- [x] 5. Ingest STEPBible TBESG + Thayer's sense counts and definitions
+- [x] 6. Extend migration script with context_retrieval ref-message-type row
+- [x] 7. Add ContextRetrievalService with offline test
+- [x] 8. Wire ContextRetrievalService into PipelineRunner and extend trace regression test
+- [x] 9. Add live end-to-end integration test for context retrieval
+- [x] 10. Add offline test for context retrieval within the full pipeline
+- [x] 11. Update architecture documentation for the context retrieval pipeline
 
-## Deferred Error Handling & Async Implementation
+### Known Limitations / Follow-ups
+- Macula gloss column missing (todo 3 schema gap)
+- Thayer's substituted with LSJ (user-approved)
 
-### Error Handling Improvements
-- [ ] Implement proper error logging with structured logging
-- [ ] Create error monitoring and alerting system
-- [ ] Add circuit breaker pattern for API failures
-- [ ] Implement graceful degradation when LLM unavailable
-- [ ] Add user-friendly error messages for validation failures
-- [ ] Create error recovery strategies for different error types
+## Next steps
 
-### Async Implementation
-- [ ] Replace sync HTTP calls with aiohttp for true async
-- [x] Create DatabasePort protocol and AsyncSQLiteDatabase adapter
-- [ ] Migrate LLMWrapper and BaseService to write messages through DatabasePort
-- [ ] Add async production database adapter (e.g., asyncpg) behind DatabasePort when hosted DB is chosen
-- [ ] Add async context managers for resource cleanup
-- [ ] Implement async batch processing for multiple queries
-- [ ] Add async queue for processing pipeline steps
-- [ ] Implement async web server integration (Quart)
+### Short Term
+- Fix macula schema: add gloss column to macula_tokens and re-ingest
+- Hebrew OT Macula integration (architecture/high-level.md notes 'OT: TBD')
+- Verify the context_retrieval rows in live e2e tests against the FULL pipeline output
 
-### Performance Optimizations
-- [ ] Add response caching with TTL
-- [ ] Implement connection pooling for API calls
-- [ ] Add request batching for efficiency
-- [ ] Implement streaming responses for large outputs
-- [ ] Add rate limiting and quota management
+### Medium Term
+- Implement RRF ranking (steps 5-6)
+- Implement response synthesis (step 10)
+- Add evaluator loop (step 11)
+- Add validator (step 12)
 
-### Production Readiness
-- [ ] Add comprehensive monitoring and metrics
-- [ ] Implement health checks and readiness probes
-- [ ] Add configuration management for different environments
-- [ ] Implement proper logging and tracing
-- [ ] Add security hardening and input validation
-- [ ] Add API key rotation and management
-
-### Documentation
-- [ ] Create comprehensive API documentation
-- [ ] Add usage examples for different pipeline steps
-- [ ] Create migration guide from old to new system
-- [ ] Add troubleshooting guide for common errors
-
-### Testing Infrastructure
-- [ ] Create test fixtures for various response formats
-- [ ] Add integration tests for full pipeline
-- [ ] Implement property-based testing for edge cases
-- [ ] Add performance benchmarking
-- [ ] Create chaos engineering tests for failure scenarios
-
-### Deployment
-- [ ] Create Docker configuration
-- [ ] Add deployment scripts for different environments
-- [ ] Implement canary deployments for new features
-- [ ] Add database migration scripts
-- [ ] Create backup and recovery procedures
+### Long Term
+- Complete full pipeline integration (steps 5-13)
+- Add production monitoring
+- Optimize performance and scalability

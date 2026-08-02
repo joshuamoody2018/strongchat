@@ -93,6 +93,14 @@
   - CLI runner: `scripts/run_pipeline.py`
 - **Testing**: ✅ Live end-to-end test passing
 
+#### 10. Context Retrieval
+- **Status**: ✅ Complete (committed 2026-08-02)
+- **Location**: `src/services/context/`
+- **Message type**: `context_retrieval` (programmatic, summary schema)
+- **Test files**: `tests/scripts/test_context_retrieval_service.py`, `tests/scripts/test_context_retrieval_offline.py`, `tests/system/test_context_retrieval_e2e.py`
+- **Score formula**: cite `composite_score(pos_weight, frequency_count, sense_count) = pos_weight * log1p(1/frequency_count) * log1p(sense_count)` from `src/config/context_constants.py`
+- **KNOWN LIMITATION**: the `gloss` field on each kept_word is empty because todo 3's `macula_tokens` SQLite schema does not include the `gloss` column from the canonical TSV. Flagged for a follow-up "fix macula schema" plan.
+
 ### 📋 Planned Components
 
 #### 1. RRF Implementation

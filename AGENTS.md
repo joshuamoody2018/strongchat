@@ -1,7 +1,7 @@
 # AGENTS.md - StrongChat Agent Reference
 
-## ACTIVE WORK STATUS (updated 2026-08-01)
-No active orchestrated work. The `hyde-retrieval-pipeline` plan completed 2026-08-01 (24/24 todos — see `.omo/boulder.json` and `.omo/plans/hyde-retrieval-pipeline.md`). Start a new plan with `/ulw-plan` when ready.
+## ACTIVE WORK STATUS (updated 2026-08-02)
+context-retrieval in progress, near completion 2026-08-02 (todos 1-10 complete; final verification wave remaining).
 
 ## Project operational conventions
 - Use `.venv/bin/python` for everything.
@@ -33,6 +33,7 @@ No active orchestrated work. The `hyde-retrieval-pipeline` plan completed 2026-0
 * `src/services/embeddings/` - Batched embedding service
 * `src/services/vectordb/` - ChromaDB verse store
 * `src/services/retrieval/` - HyDE → verse retrieval service
+* `src/services/context/` - Original-language context retrieval service
 * `src/services/pipeline/` - Pipeline orchestrator
 * `src/config/` - JSON schemas and prompt templates
 * `scripts/` - Testing and utility scripts
