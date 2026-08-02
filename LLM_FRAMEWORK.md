@@ -16,9 +16,9 @@ The StrongChat LLM Framework provides a structured approach to handling LLM inte
 2. **Service Layer** (`src/services/`)
    - `base.py`: Shared `BaseService` foundation (owns one `LLMWrapper`, DB, and cache)
    - `llm/`: LLM client and utilities
-     - `wrapper.py`: Canonical recorded-path LLM client with async support
-     - `client.py`: Original LLM client (kept for compatibility)
+     - `wrapper.py`: Canonical async LLM client with database-driven config and retry logic
      - `aimessage.py`: JSON response parser and validation
+     - `parser.py`: Standalone JSON schema validator (used by tests; the wrapper uses `aimessage.py`)
      - `exceptions.py`: Custom exception classes
    - `intent/`: Intent generation service
    - `hyde/`: HyDE generation service
@@ -32,7 +32,7 @@ The StrongChat LLM Framework provides a structured approach to handling LLM inte
 
 ### Canonical Recorded Path
 
-`LLMWrapper` (`src/services/llm/wrapper.py`) is the canonical LLM client for the pipeline. It records every call in the `messages` table and is the client inherited by `BaseService`. The older `LLMClient` (`src/services/llm/client.py`) is kept for compatibility but is not used by new services.
+`LLMWrapper` (`src/services/llm/wrapper.py`) is the canonical LLM client for the pipeline. It records every call in the `messages` table, reads its configuration from `ref_message_types` (model, temperature, prompt template, max retries), and is the client inherited by `BaseService`. Every service that needs to talk to an LLM calls `await wrapper.call_api(...)`.
 
 The four recorded message types used by the HyDE-retrieval pipeline are:
 
@@ -69,31 +69,25 @@ The four recorded message types used by the HyDE-retrieval pipeline are:
 
 ## Usage Examples
 
-### Basic Schema-Driven Call
+### Basic Recorded Call
+
+`LLMWrapper.call_api` is the only entry point for production code. It is async, reads model/prompt/retry config from the `ref_message_types` table (slug-driven), and persists the call to the `messages` table.
 
 ```python
-from services.llm.client import LLMClient
-from config.schemas import INTENT_GENERATION_SCHEMA
-from config.prompts import INTENT_GENERATION_PROMPT
-from services.llm.parser import BaseResponseModel
 import asyncio
 
-
-class IntentGenerationResponse(BaseResponseModel):
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
+from services.llm.wrapper import LLMWrapper
 
 
 async def main():
-    client = LLMClient()
-    response = await client.call_with_schema(
-        prompt_template=INTENT_GENERATION_PROMPT,
-        response_schema=INTENT_GENERATION_SCHEMA,
-        response_model=IntentGenerationResponse,
-        model="mistralai/mistral-small-24b-instruct-2501",
-        query="why do bad things happen"
+    wrapper = LLMWrapper()
+    message = await wrapper.call_api(
+        message_type_slug="intent_generation",
+        unique_prompt="why do bad things happen",
+        session_uuid=session_uuid,
     )
-    print(response)
+    print(message.raw_response)
+    wrapper.close()
 
 
 asyncio.run(main())
@@ -108,18 +102,9 @@ OPENROUTER_API_KEY=your_api_key_here
 MODEL_SLUG_INTENTS=mistralai/mistral-small-24b-instruct-2501
 ```
 
-### Model Configuration
+### Model Configuration (Database-Driven)
 
-```python
-model_config = {
-    "max_retries": 3,
-    "initial_backoff": 1.0,
-    "max_backoff": 30.0,
-    "timeout": 30.0
-}
-
-client = LLMClient(model_config)
-```
+`LLMWrapper` does not take `model_config` in code — model, temperature, prompt template, and max retries are all stored in the `ref_message_types` table. To tune a message type, update its row (or seed via `scripts/migrate_pipeline_message_types.py`); every subsequent `call_api` picks it up through the cache.
 
 ## Error Handling
 
@@ -142,31 +127,25 @@ from services.llm.exceptions import (
 ### Error Recovery
 
 ```python
-from config.schemas import INTENT_GENERATION_SCHEMA
-from config.prompts import INTENT_GENERATION_PROMPT
-from services.llm.parser import BaseResponseModel
+import asyncio
+
+from services.llm.wrapper import LLMWrapper
+from services.llm.exceptions import MaxRetriesExceededError
 
 
-class IntentGenerationResponse(BaseResponseModel):
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
-
-
-try:
-    response = await client.call_with_schema(
-        prompt_template=INTENT_GENERATION_PROMPT,
-        response_schema=INTENT_GENERATION_SCHEMA,
-        response_model=IntentGenerationResponse,
-        model="mistralai/mistral-small-24b-instruct-2501",
-        query=query
-    )
-except MaxRetriesExceededError:
-    # Handle API failure after 3 retries
-    print("API temporarily unavailable, using fallback logic")
-    response = fallback_logic(query)
-except ResponseValidationError:
-    # Handle malformed response
-    print("Response validation failed, check logs")
+async def generate(query: str, session_uuid: str) -> str | None:
+    wrapper = LLMWrapper()
+    try:
+        message = await wrapper.call_api(
+            message_type_slug="intent_generation",
+            unique_prompt=query,
+            session_uuid=session_uuid,
+        )
+        return message.raw_response
+    except MaxRetriesExceededError:
+        # API failed after the configured number of retries.
+        print("API temporarily unavailable, using fallback logic")
+        return fallback_logic(query)
 ```
 
 ## JSON Schema Structure
@@ -201,10 +180,10 @@ except ResponseValidationError:
 
 ```bash
 # Test parser functionality
-python3 scripts/test_parser.py
+.venv/bin/python tests/scripts/test_parser.py
 
-# Test full LLM framework (requires API key)
-python3 scripts/test_llm_framework.py
+# Test offline wrapper behavior (retry, parsing, fixtures)
+.venv/bin/python tests/scripts/test_pipeline_offline.py
 ```
 
 ### Test Coverage
@@ -279,17 +258,16 @@ export MODEL_SLUG_INTENTS=openai/gpt-3.5-turbo
 ### Adding New Schemas
 
 1. Add schema to `src/config/schemas.py`
-2. Create corresponding response model in `src/services/llm/parser.py`
-3. Update client parsers in `src/services/llm/client.py`
+2. The wrapper auto-validates responses against `ref_message_types[slug].request_schema` via `AIMessage.get_parsed_response`; no manual parser wiring required.
+3. Add comprehensive error logging
 
 ### Adding New Prompts
 
-1. Add prompt template to `src/config/prompts.py`
+1. Add prompt template to `src/config/prompts.py` and reference it from the corresponding `ref_message_types.prompt_template` row
 2. Ensure prompt is pipeline-agnostic
 3. Test with schema validation
 
 ### Error Handling
 
 1. Add new exception types to `src/services/llm/exceptions.py`
-2. Update error handlers in client
-3. Add comprehensive error logging
+2. Wrap `wrapper.call_api(...)` calls in `try/except MaxRetriesExceededError` (or `ResponseValidationError` if you parse the response yourself)

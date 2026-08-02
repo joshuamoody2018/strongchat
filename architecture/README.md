@@ -142,9 +142,10 @@ src/
 ├── services/
 │   ├── base.py              # Shared BaseService foundation
 │   ├── llm/                 # LLM framework
-│   │   ├── client.py        # Async LLM client
-│   │   ├── parser.py        # JSON response parser
-│   │   └── exceptions.py   # Error handling
+│   │   ├── wrapper.py       # Async, database-driven LLM client (canonical)
+│   │   ├── aimessage.py     # JSON response parser + AIMessage dataclass
+│   │   ├── parser.py        # Standalone JSON schema validator
+│   │   └── exceptions.py    # Error handling
 │   ├── sqlite/              # Database operations
 │   ├── intent/              # Intent generation service
 │   ├── hyde/                # HyDE generation service

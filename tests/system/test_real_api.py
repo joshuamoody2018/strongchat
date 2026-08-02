@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Test real API call with intent classification"""
 
+import asyncio
 import sys
 sys.path.insert(0, 'src')
 
@@ -11,27 +12,29 @@ from services.llm.aimessage import AIMessage
 def test_real_api():
     """Test real API call with intent classification"""
     print("=== Testing Real API Call with Intent Classification ===\n")
-    
+
     try:
         cache = GlobalReferenceCache()
         llm_wrapper = LLMWrapper()
-        
+
         # Check updated schema
         intent_config = cache.get_message_type("intent_classification")
         print("1. Schema Configuration:")
         print(f"   Model: {intent_config['model_slug']}")
         print(f"   Temperature: {intent_config['temperature']}")
         print(f"   Max Retries: {intent_config['max_retries']}")
-        
+
         # Test real API call
         print("\n2. Real API Call:")
         test_query = "What does the Bible say about faith and hope?"
         print(f"   Query: '{test_query}'")
-        
-        intent_message = llm_wrapper.sync_call_api(
-            message_type_slug="intent_classification",
-            unique_prompt=test_query,
-            session_uuid="test-session"
+
+        intent_message = asyncio.run(
+            llm_wrapper.call_api(
+                message_type_slug="intent_classification",
+                unique_prompt=test_query,
+                session_uuid="test-session",
+            )
         )
         
         print(f"   Successful: {intent_message.is_successful()}")

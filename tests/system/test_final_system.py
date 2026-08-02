@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Test final concise prompt"""
 
+import asyncio
 import sys
 sys.path.insert(0, 'src')
 
@@ -11,32 +12,34 @@ from services.llm.aimessage import AIMessage
 def test_final_system():
     """Test final system with concise prompt"""
     print("=== Testing Final Intent Classification System ===\n")
-    
+
     try:
         cache = GlobalReferenceCache()
         cache.refresh_cache()
         llm_wrapper = LLMWrapper()
-        
+
         intent_config = cache.get_message_type("intent_classification")
         print("✓ System Configuration:")
         print(f"  Model: {intent_config['model_slug']}")
         print(f"  Schema: {intent_config['request_schema']['title']}")
         print(f"  Max Retries: {intent_config['max_retries']}")
-        
+
         # Test with multiple queries
         test_queries = [
             "What does the Bible say about faith and hope?",
             "Tell me about love",
             "How to be patient?"
         ]
-        
+
         for i, query in enumerate(test_queries, 1):
             print(f"\n{i}. Testing Query: '{query}'")
-            
-            intent_message = llm_wrapper.sync_call_api(
-                message_type_slug="intent_classification",
-                unique_prompt=query,
-                session_uuid=f"test-session-{i}"
+
+            intent_message = asyncio.run(
+                llm_wrapper.call_api(
+                    message_type_slug="intent_classification",
+                    unique_prompt=query,
+                    session_uuid=f"test-session-{i}",
+                )
             )
             
             print(f"   Successful: {intent_message.is_successful()}")

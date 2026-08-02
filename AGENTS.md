@@ -25,7 +25,7 @@ context-retrieval in progress, near completion 2026-08-02 (todos 1-10 complete; 
 * `todo.md` - All actionable items (next steps and deferred tasks)
 
 ## Code Structure
-* `src/services/llm/` - LLM framework (wrapper, client, parser, exceptions)
+* `src/services/llm/` - LLM framework (wrapper, aimessage, parser, exceptions)
 * `src/services/base.py` - Shared `BaseService` foundation
 * `src/services/sqlite/` - Database operations and session management
 * `src/services/intent/` - Intent generation service
@@ -40,7 +40,7 @@ context-retrieval in progress, near completion 2026-08-02 (todos 1-10 complete; 
 
 ## Key Entry Points
 * `src/main.py` - Application entry point (basic chat interface)
-* `src/services/llm/client.py` - LLM client with structured responses
+* `src/services/llm/wrapper.py` - Canonical async LLM wrapper (database-driven config, retry, recording)
 * `src/services/sqlite/database.py` - Database operations
 * `src/config/schemas.py` - Response validation schemas
 

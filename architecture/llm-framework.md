@@ -2,7 +2,7 @@
 
 ## Overview
 
-The LLM Framework provides structured, validated LLM interactions with robust error handling and async support. The canonical recorded-path client is `LLMWrapper`; `LLMClient` is a generic schema-driven client kept for compatibility.
+The LLM Framework provides structured, validated LLM interactions with robust error handling and async support. `LLMWrapper` (`src/services/llm/wrapper.py`) is the canonical recorded-path client — database-driven, async, and the only LLM caller used by production services.
 
 ## Core Components
 
@@ -66,25 +66,31 @@ asyncio.run(main())
 ```
 
 ### Custom Schema Integration
+
+`LLMWrapper.call_api` reads its schema from `ref_message_types[slug].request_schema` and validates the response through `AIMessage.get_parsed_response`. No subclassing or client-side schema wiring is required:
+
 ```python
-from services.llm.client import LLMClient
-from config.schemas import INTENT_GENERATION_SCHEMA
-from config.prompts import INTENT_GENERATION_PROMPT
-from services.llm.parser import BaseResponseModel
+import asyncio
+
+from config.cache import GlobalReferenceCache
+from services.llm.wrapper import LLMWrapper
 
 
-class IntentGenerationResponse(BaseResponseModel):
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
+async def main():
+    cache = GlobalReferenceCache()
+    wrapper = LLMWrapper()
+
+    intent_config = cache.get_message_type("intent_generation")
+    message = await wrapper.call_api(
+        message_type_slug="intent_generation",
+        unique_prompt="user query",
+        session_uuid=session_uuid,
+    )
+    parsed = message.get_parsed_response(intent_config["request_schema"])
+    print(parsed)
 
 
-response = await client.call_with_schema(
-    prompt_template=INTENT_GENERATION_PROMPT,
-    response_schema=INTENT_GENERATION_SCHEMA,
-    response_model=IntentGenerationResponse,
-    model="mistralai/mistral-small-24b-instruct-2501",
-    query="user query"
-)
+asyncio.run(main())
 ```
 
 ## Design Principles

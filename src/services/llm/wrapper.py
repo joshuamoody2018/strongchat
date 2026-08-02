@@ -200,23 +200,6 @@ class LLMWrapper:
         except aiohttp.ClientError as e:
             raise APIConnectionError(f"API connection error: {e}")
     
-    def sync_call_api(self, message_type_slug: str, unique_prompt: str, 
-                     session_uuid: str) -> AIMessage:
-        """Synchronous wrapper for API call.
-        
-        Args:
-            message_type_slug: Slug of the message type from database
-            unique_prompt: The core message content
-            session_uuid: UUID of the session
-            
-        Returns:
-            AIMessage object with the result
-        """
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(
-            self.call_api(message_type_slug, unique_prompt, session_uuid)
-        )
-    
     def close(self):
         """Close both synchronous and asynchronous database connections and cache."""
         self.db.close()

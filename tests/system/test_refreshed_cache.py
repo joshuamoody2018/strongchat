@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Test real API call with refreshed cache"""
 
+import asyncio
 import sys
 sys.path.insert(0, 'src')
 
@@ -11,13 +12,13 @@ from services.llm.aimessage import AIMessage
 def test_with_refreshed_cache():
     """Test real API call with refreshed cache"""
     print("=== Testing Real API Call with Refreshed Cache ===\n")
-    
+
     try:
         # Refresh cache to get updated database schema
         cache = GlobalReferenceCache()
         cache.refresh_cache()
         llm_wrapper = LLMWrapper()
-        
+
         # Check updated schema and prompt
         intent_config = cache.get_message_type("intent_classification")
         print("1. Configuration Check:")
@@ -25,23 +26,25 @@ def test_with_refreshed_cache():
         print(f"   ✓ Temperature: {intent_config['temperature']}")
         print(f"   ✓ Max Retries: {intent_config['max_retries']}")
         print(f"   ✓ Schema loaded: {intent_config['request_schema']['title']}")
-        
+
         # Check if prompt template exists
         if 'prompt_template' in intent_config:
-            print(f"   ✓ Prompt template loaded")
+            print("   ✓ Prompt template loaded")
             print(f"   Prompt preview: {intent_config['prompt_template'][:100]}...")
         else:
             print("   ✗ No prompt template found")
-        
+
         # Test real API call
         print("\n2. Real API Call:")
         test_query = "What does the Bible say about faith and hope?"
         print(f"   Query: '{test_query}'")
-        
-        intent_message = llm_wrapper.sync_call_api(
-            message_type_slug="intent_classification",
-            unique_prompt=test_query,
-            session_uuid="test-session"
+
+        intent_message = asyncio.run(
+            llm_wrapper.call_api(
+                message_type_slug="intent_classification",
+                unique_prompt=test_query,
+                session_uuid="test-session",
+            )
         )
         
         print(f"   Successful: {intent_message.is_successful()}")

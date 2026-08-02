@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Test the intent classification API directly"""
 
+import asyncio
 import sys
 sys.path.insert(0, 'src')
 
@@ -11,24 +12,26 @@ from services.llm.aimessage import AIMessage
 def test_intent_api():
     """Test the intent classification API directly"""
     print("=== Testing Intent Classification API ===\n")
-    
+
     try:
         cache = GlobalReferenceCache()
         llm_wrapper = LLMWrapper()
-        
+
         # Get the intent classification schema
         intent_config = cache.get_message_type("intent_classification")
         print("1. Intent Schema:")
         print(f"   Slug: {intent_config['slug']}")
         print(f"   Model: {intent_config['model_slug']}")
         print(f"   Schema: {intent_config['request_schema']}")
-        
+
         # Test mock API call
         print("\n2. Testing Mock API Call:")
-        intent_message = llm_wrapper.sync_call_api(
-            message_type_slug="intent_classification",
-            unique_prompt="hello there",
-            session_uuid="test-session"
+        intent_message = asyncio.run(
+            llm_wrapper.call_api(
+                message_type_slug="intent_classification",
+                unique_prompt="hello there",
+                session_uuid="test-session",
+            )
         )
         
         print(f"   Raw Response: {intent_message.raw_response}")
