@@ -9,6 +9,7 @@ context-retrieval in progress, near completion 2026-08-02 (todos 1-10 complete; 
 - Never stage `.env`, `data/`, `*.pyc`, or files under `.venv/`; review `README.md` and `.gitignore` before staging.
 - Freeform sentence-case commit messages.
 - Every OpenRouter call recorded in `messages` linked to `ref_message_types`.
+- Test queries must NOT be biblical/christian/faith-specific. The system is general-purpose input → biblically-backed output, so tests should use non-biblical questions (themes may incidentally overlap scripture, but never ask "what does the Bible say about X" as a test).
 
 ## Project Overview
 - **Purpose**: Bible verse retrieval and answer synthesis using LLMs
