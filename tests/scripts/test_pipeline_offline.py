@@ -274,49 +274,78 @@ class TestAIMessageParsing(unittest.TestCase):
 
     def test_intent_markdown_fenced_json(self):
         """Fenced JSON for the intent schema parses correctly."""
-        raw = _fence(json.dumps(_intent_fixture()))
-        parsed = AIMessage(raw_response=raw).get_parsed_response(
-            INTENT_GENERATION_SCHEMA
+        msg = AIMessage()
+        msg.mark_success_from_text(
+            _fence(json.dumps(_intent_fixture())),
+            schema=INTENT_GENERATION_SCHEMA,
         )
+        parsed = msg.get_parsed_response(INTENT_GENERATION_SCHEMA)
         self.assertEqual(
             parsed["query_analysis"]["original_query"],
             "why do bad things happen",
         )
 
-    def test_intent_prose_wrapped_json(self):
-        """JSON surrounded by prose for the intent schema parses correctly."""
+    def test_intent_prose_wrapped_json_rejected(self):
+        """Prose-wrapped JSON is rejected by strict extraction."""
         raw = _with_prose(json.dumps(_intent_fixture()))
-        parsed = AIMessage(raw_response=raw).get_parsed_response(
-            INTENT_GENERATION_SCHEMA
-        )
-        self.assertEqual(parsed["intents"][0]["intent_id"], "theological")
-
-    def test_intent_invalid_confidence_raises(self):
-        """A confidence value above 1.0 raises ValueError."""
-        fixture = _intent_fixture()
-        fixture["intents"][0]["confidence"] = 1.5
-        raw = json.dumps(fixture)
         with self.assertRaises(ValueError):
             AIMessage(raw_response=raw).get_parsed_response(
                 INTENT_GENERATION_SCHEMA
             )
 
+    def test_intent_mark_success_strips_fence_and_canonicalizes(self):
+        """mark_success_from_text strips fences and stores canonical JSON."""
+        msg = AIMessage()
+        msg.mark_success_from_text(
+            _fence(json.dumps(_intent_fixture())),
+            schema=INTENT_GENERATION_SCHEMA,
+        )
+        self.assertIsInstance(msg.parsed_response, dict)
+        self.assertNotIn("```", msg.raw_response or "")
+        reparsed = json.loads(msg.raw_response)
+        self.assertEqual(
+            reparsed["query_analysis"]["original_query"],
+            "why do bad things happen",
+        )
+
+    def test_intent_mark_success_prose_residue_rejected(self):
+        """Prose residue around a fenced body is rejected."""
+        msg = AIMessage()
+        with self.assertRaises(ValueError):
+            msg.mark_success_from_text(
+                _with_prose(json.dumps(_intent_fixture())),
+                schema=INTENT_GENERATION_SCHEMA,
+            )
+
+    def test_intent_invalid_confidence_raises(self):
+        """A confidence value above 1.0 raises ValueError."""
+        fixture = _intent_fixture()
+        fixture["intents"][0]["confidence"] = 1.5
+        msg = AIMessage()
+        with self.assertRaises(ValueError):
+            msg.mark_success_from_text(
+                json.dumps(fixture),
+                schema=INTENT_GENERATION_SCHEMA,
+            )
+
     def test_hyde_markdown_fenced_json(self):
         """Fenced JSON for the HyDE schema parses correctly."""
-        raw = _fence(json.dumps(_hyde_fixture()))
-        parsed = AIMessage(raw_response=raw).get_parsed_response(
-            HYDE_GENERATION_SCHEMA
+        msg = AIMessage()
+        msg.mark_success_from_text(
+            _fence(json.dumps(_hyde_fixture())),
+            schema=HYDE_GENERATION_SCHEMA,
         )
+        parsed = msg.get_parsed_response(HYDE_GENERATION_SCHEMA)
         self.assertIn("hyde_document", parsed)
         self.assertGreater(len(parsed["hyde_document"]), 50)
 
-    def test_hyde_prose_wrapped_json(self):
-        """JSON surrounded by prose for the HyDE schema parses correctly."""
+    def test_hyde_prose_wrapped_json_rejected(self):
+        """Prose-wrapped HyDE JSON is rejected by strict extraction."""
         raw = _with_prose(json.dumps(_hyde_fixture()))
-        parsed = AIMessage(raw_response=raw).get_parsed_response(
-            HYDE_GENERATION_SCHEMA
-        )
-        self.assertGreater(len(parsed["hyde_document"]), 50)
+        with self.assertRaises(ValueError):
+            AIMessage(raw_response=raw).get_parsed_response(
+                HYDE_GENERATION_SCHEMA
+            )
 
 
 class TestLLMWrapperRetry(unittest.TestCase):

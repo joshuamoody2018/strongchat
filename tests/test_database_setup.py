@@ -3,6 +3,7 @@
 
 import os
 import sys
+import json
 import tempfile
 import unittest
 import sqlite3
@@ -139,13 +140,26 @@ class TestAIMessage(unittest.TestCase):
     def test_aimessage_success_flow(self):
         """Test successful message flow"""
         aimessage = AIMessage(unique_prompt="Test prompt")
-        
-        # Mark success
+
         test_response = '{"intent": "question", "confidence": 0.95}'
-        aimessage.mark_success(test_response)
-        
+        aimessage.mark_success_from_text(
+            test_response,
+            schema={
+                "type": "object",
+                "properties": {
+                    "intent": {"type": "string"},
+                    "confidence": {"type": "number"},
+                },
+                "required": ["intent", "confidence"],
+            },
+        )
+
         self.assertTrue(aimessage.is_successful())
         self.assertIsNotNone(aimessage.raw_response)
+        self.assertEqual(
+            json.loads(aimessage.raw_response),
+            {"intent": "question", "confidence": 0.95},
+        )
         self.assertIsNotNone(aimessage.response_at)
         self.assertIsNone(aimessage.error_text)
     
@@ -189,25 +203,46 @@ class TestAIMessage(unittest.TestCase):
         self.assertEqual(parsed["confidence"], 0.95)
     
     def test_json_extraction(self):
-        """Test JSON extraction from various response formats"""
-        aimessage = AIMessage()
-        
-        # Test markdown JSON
-        response = '''```json
-{"intent": "question", "confidence": 0.95}
-```'''
-        json_str = aimessage._extract_json(response)
-        self.assertEqual(json_str, '{"intent": "question", "confidence": 0.95}')
-        
-        # Test plain JSON
-        response = '{"intent": "question", "confidence": 0.95}'
-        json_str = aimessage._extract_json(response)
-        self.assertEqual(json_str, '{"intent": "question", "confidence": 0.95}')
-        
-        # Test JSON with surrounding text
-        response = 'Here is the response: {"intent": "question", "confidence": 0.95} - end'
-        json_str = aimessage._extract_json(response)
-        self.assertEqual(json_str, '{"intent": "question", "confidence": 0.95}')
+        """Test JSON extraction across the storage contract."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "intent": {"type": "string"},
+                "confidence": {"type": "number"},
+            },
+            "required": ["intent", "confidence"],
+        }
+
+        fenced = AIMessage()
+        fenced.mark_success_from_text(
+            '```json\n{"intent": "question", "confidence": 0.95}\n```',
+            schema=schema,
+        )
+        self.assertEqual(fenced.get_parsed_response(schema), {"intent": "question", "confidence": 0.95})
+
+        bare = AIMessage()
+        bare.mark_success_from_text(
+            '{"intent": "question", "confidence": 0.95}',
+            schema=schema,
+        )
+        self.assertEqual(bare.get_parsed_response(schema), {"intent": "question", "confidence": 0.95})
+
+        prose = AIMessage()
+        with self.assertRaises(ValueError):
+            prose.mark_success_from_text(
+                'Here is the response: {"intent": "question", "confidence": 0.95} - end',
+                schema=schema,
+            )
+
+    def test_mark_success_canonicalizes_response(self):
+        """mark_success_from_text stores parsed dict + canonical JSON string."""
+        msg = AIMessage()
+        msg.mark_success_from_text(
+            '```json\n{"a": 1, "b": [2, 3]}\n```',
+            schema={"type": "object"},
+        )
+        self.assertEqual(msg.parsed_response, {"a": 1, "b": [2, 3]})
+        self.assertEqual(msg.raw_response, '{"a":1,"b":[2,3]}')
     
 
 

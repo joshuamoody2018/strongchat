@@ -27,7 +27,6 @@ EXPECTED_ACTIVE = {
     'intent_generation',
     'hyde_generation',
     'embedding_generation',
-    'llm_response',
 }
 
 
@@ -77,6 +76,7 @@ class TestPipelineMessageTypeMigration(unittest.TestCase):
         self.assertNotIn('intent_classification', flags)
         self.assertNotIn('error', flags)
         self.assertNotIn('corpus_ingest', flags)
+        self.assertNotIn('llm_response', flags)
         self.assertEqual(len(flags), 5)
 
     def test_new_row_field_values(self):
@@ -86,13 +86,12 @@ class TestPipelineMessageTypeMigration(unittest.TestCase):
             rows = {
                 row['slug']: dict(row)
                 for row in conn.execute(
-                    "SELECT * FROM ref_message_types WHERE slug IN (?, ?, ?, ?, ?)",
+                    "SELECT * FROM ref_message_types WHERE slug IN (?, ?, ?, ?)",
                     (
                         'human_input',
                         'intent_generation',
                         'hyde_generation',
                         'embedding_generation',
-                        'llm_response',
                     ),
                 )
             }
@@ -106,9 +105,7 @@ class TestPipelineMessageTypeMigration(unittest.TestCase):
             rows['embedding_generation']['model_slug'],
             'openai/text-embedding-3-small',
         )
-        self.assertEqual(rows['llm_response']['creator_type'], 'llm')
-        self.assertEqual(rows['llm_response']['step_name'], 'LLM Response')
-        
+
         for slug, row in rows.items():
             self.assertEqual(row['max_retries'], 3, slug)
             self.assertEqual(row['is_active'], 1, slug)

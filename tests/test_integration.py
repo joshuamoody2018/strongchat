@@ -3,6 +3,7 @@
 
 import os
 import sys
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -134,8 +135,18 @@ class TestIntegration(unittest.TestCase):
 
             self.assertEqual(result1.message_type_slug, "intent_classification")
             self.assertEqual(result2.message_type_slug, "intent_classification")
-            self.assertEqual(result1.raw_response, mock_response)
-            self.assertEqual(result2.raw_response, mock_response)
+            self.assertEqual(
+                result1.parsed_response,
+                {"intent": "question", "confidence": 0.95},
+            )
+            self.assertEqual(
+                json.loads(result1.raw_response),
+                {"intent": "question", "confidence": 0.95},
+            )
+            self.assertEqual(
+                json.loads(result2.raw_response),
+                {"intent": "question", "confidence": 0.95},
+            )
 
             messages = self.db.get_messages_by_session_and_type(self.session_uuid)
             self.assertEqual(len(messages), 2)
@@ -174,7 +185,14 @@ class TestIntegration(unittest.TestCase):
             # Verify it eventually succeeded
             self.assertTrue(result.is_successful())
             self.assertEqual(result.num_tries, 5)  # 4 failures + 1 success
-            self.assertEqual(result.raw_response, '{"intent": "question", "confidence": 0.9}')
+            self.assertEqual(
+                result.parsed_response,
+                {"intent": "question", "confidence": 0.9},
+            )
+            self.assertEqual(
+                json.loads(result.raw_response),
+                {"intent": "question", "confidence": 0.9},
+            )
             
             # Verify success was recorded in database
             messages = self.db.get_messages_by_session_and_type(self.session_uuid)
