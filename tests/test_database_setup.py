@@ -16,7 +16,7 @@ from services.llm.aimessage import AIMessage
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 import create_new_database
-import populate_message_types
+import migrate_pipeline_message_types
 
 
 class TestDatabaseSetup(unittest.TestCase):
@@ -27,7 +27,7 @@ class TestDatabaseSetup(unittest.TestCase):
         self.test_db = tempfile.mktemp(suffix='.db')
 
         create_new_database.create_new_database(self.test_db)
-        populate_message_types.populate_message_types(self.test_db)
+        migrate_pipeline_message_types.migrate(self.test_db)
 
         self.db = ChatDatabase(self.test_db)
     
@@ -55,7 +55,7 @@ class TestDatabaseSetup(unittest.TestCase):
         
         # Test getting active message types (should have intent_classification from setup)
         active_types = self.db.get_active_message_types()
-        self.assertEqual(len(active_types), 1)  # intent_classification should be populated
+        self.assertEqual(len(active_types), 5)
     
     def test_message_operations(self):
         """Test message operations with new schema"""
