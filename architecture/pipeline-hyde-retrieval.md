@@ -8,7 +8,7 @@ The HyDE retrieval half of the StrongChat pipeline turns a plain-language user q
 2. **HyDE Generation** — generate one hypothetical biblical passage per intent.
 3. **Parallel Retrieval** — embed every HyDE document and query ChromaDB verse collections.
 
-The implemented services are located under `src/services/` and are composed by `PipelineRunner` (`src/services/pipeline/runner.py`). The CLI entry point is `scripts/run_pipeline.py`.
+The implemented services are located under `src/services/` and are composed by `PipelineRunner` (`src/services/pipeline/runner.py`). The CLI entry point is `src/main.py`.
 
 This document describes the message types, service contracts, data flow, and how to run the implemented pipeline.
 
@@ -165,14 +165,10 @@ PipelineResult(intents, hyde_docs, results)
 ### Run the full pipeline CLI
 
 ```bash
-.venv/bin/python scripts/run_pipeline.py "what does the Bible say about anxiety" --top-k 5
+.venv/bin/python src/main.py "what does the Bible say about anxiety"
 ```
 
-Run against a single translation:
-
-```bash
-.venv/bin/python scripts/run_pipeline.py "love your enemies" --translations kjv --top-k 5
-```
+The query is a positional argument; `top_k`, translations, and other settings are read from `PipelineRunner`'s defaults (override by editing the runner or by calling `PipelineRunner.run(...)` directly from Python).
 
 ### Ingest the Bible corpus
 

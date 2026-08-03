@@ -102,10 +102,10 @@ StrongChat is a biblical search system using LLMs with two-level RRF (Reciprocal
   - Parallel Chroma queries across `(doc, translation)` pairs
   - Structured hits with reference and distance
 
-#### Pipeline Orchestrator (`src/services/pipeline/`, `scripts/run_pipeline.py`)
+#### Pipeline Orchestrator (`src/services/pipeline/`, `src/main.py`)
 - **Purpose**: Compose intent → HyDE → retrieval into one runnable flow
 - **Status**: ✅ Implemented
-- **Key Files**: `src/services/pipeline/runner.py`, `scripts/run_pipeline.py`
+- **Key Files**: `src/services/pipeline/runner.py`, `src/main.py`
 - **Key Features**:
   - Shared `EmbeddingService` injected into retrieval
   - `PipelineResult` dataclass
@@ -144,7 +144,6 @@ src/
 │   ├── llm/                 # LLM framework
 │   │   ├── wrapper.py       # Async, database-driven LLM client (canonical)
 │   │   ├── aimessage.py     # JSON response parser + AIMessage dataclass
-│   │   ├── parser.py        # Standalone JSON schema validator
 │   │   └── exceptions.py    # Error handling
 │   ├── sqlite/              # Database operations
 │   ├── intent/              # Intent generation service
@@ -160,10 +159,8 @@ data/
 └── chat_database.db         # SQLite database
 
 scripts/
-├── test_*.py                # Test suites
-├── create_database.py       # Database utilities
 ├── ingest_corpus.py         # Bible corpus ingest into ChromaDB
-└── run_pipeline.py          # CLI pipeline runner
+└── create_new_database.py   # Database schema (idempotent; seeding via migrate_pipeline_message_types.py)
 
 architecture/
 ├── high-level.md            # This document

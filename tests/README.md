@@ -201,7 +201,7 @@ aiohttp>=3.8.0
 .venv/bin/python scripts/create_new_database.py --db-path data/test_chat_database.db
 
 # Populate test data
-.venv/bin/python scripts/populate_message_types.py --db-path data/test_chat_database.db
+.venv/bin/python scripts/migrate_pipeline_message_types.py --db-path data/test_chat_database.db
 
 # Run a quick script-style test
 .venv/bin/python tests/scripts/test_database_queries.py

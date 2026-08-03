@@ -27,7 +27,9 @@ src/              Source code and service implementations
   config/         JSON schemas, prompt templates, model configs
 scripts/          Setup, utility, and pipeline scripts
   setup_environment.sh    Bootstrap Python environment and dependencies
-  run_pipeline.py         Run the full retrieval pipeline
+  ingest_corpus.py        Ingest Bible corpus into ChromaDB
+  create_new_database.py  Create the SQLite schema (seeding via migrate_pipeline_message_types.py)
+  migrate_pipeline_message_types.py  Seed/update ref_message_types rows
 tests/            Test suites
   system/         System/integration tests
   scripts/        Script-level tests
@@ -60,7 +62,7 @@ Run the full pipeline against a question:
 
 ```bash
 set -a; . ./.env; set +a
-.venv/bin/python scripts/run_pipeline.py "your question"
+.venv/bin/python src/main.py "your question"
 ```
 
 ## Testing

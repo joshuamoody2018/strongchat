@@ -104,13 +104,13 @@
   - Returns structured hits with `id`, `text`, `reference`, `distance`
 - **Testing**: ✅ Offline tests passing
 
-#### Pipeline Orchestrator (`src/services/pipeline/`, `scripts/run_pipeline.py`)
+#### Pipeline Orchestrator (`src/services/pipeline/`, `src/main.py`)
 - **Status**: ✅ Complete
-- **Location**: `src/services/pipeline/`, `scripts/run_pipeline.py`
+- **Location**: `src/services/pipeline/`, `src/main.py`
 - **Components**:
   - `PipelineRunner` composes `IntentService`, `HydeService`, `EmbeddingService`, `VerseStore`, `RetrievalService`
   - `PipelineResult` dataclass with `session_uuid`, `query`, `intents`, `hyde_docs`, `results`
-  - CLI runner: `scripts/run_pipeline.py`
+  - CLI runner: `src/main.py`
 - **Testing**: ✅ Live end-to-end test passing
 
 #### Context Retrieval (`src/services/context/`)

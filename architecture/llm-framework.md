@@ -19,15 +19,15 @@ class LLMWrapper:
     - JSON schema validation
 ```
 
-### 2. Parser Layer (`src/services/llm/parser.py`)
+### 2. AIMessage Layer (`src/services/llm/aimessage.py`)
 ```python
-class ResponseParser:
-    """Automated JSON parsing with schema validation"""
+class AIMessage:
+    """Pydantic model + strict-JSON parsing contract for LLM responses."""
 
     Key Features:
-    - JSON extraction from markdown/plain text
-    - JSON Schema validation
-    - BaseResponseModel for type safety
+    - Strict JSON-only parsing (no markdown fence extraction)
+    - Pydantic v2 validation against `response_schema`
+    - Records raw_response verbatim for auditability
     - Error handling for malformed responses
 ```
 

@@ -5,14 +5,14 @@
 ### Phase 1: Structured Response Framework ✅
 - [x] Create src/config/schemas.py with INTENT_GENERATION_SCHEMA
 - [x] Create src/config/prompts.py with INTENT_GENERATION_PROMPT
-- [x] Create src/services/llm/parser.py with automated JSON parsing
+- [x] Create src/services/llm/aimessage.py with strict JSON parsing
 - [x] Create src/services/llm/client.py with retry/backoff logic
 - [x] Create src/services/llm/exceptions.py for error handling
 - [x] Create src/services/llm/__init__.py and src/config/__init__.py
 
 ### Phase 2: Intent Service Refactor ✅
 - [x] Update src/services/intent/service.py to use the wrapper framework
-- [x] Define intent response models in src/services/llm/parser.py
+- [x] Define intent response models in src/services/llm/aimessage.py
 - [x] Update database schema to store structured intent data
 
 ### Phase 3: Testing

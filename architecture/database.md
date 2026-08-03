@@ -162,7 +162,7 @@ The context retrieval service queries this database to enrich retrieved verses w
 - Implementation: `src/services/sqlite/`
 - Database: `data/chat_database.db`
 - Macula Index: `data/macula_index.db`
-- Utilities: `scripts/create_database.py`, `scripts/check_database.py`
+- Utilities: `scripts/create_new_database.py` (schema) + `scripts/migrate_pipeline_message_types.py` (seeding)
 - Macula Scripts: `scripts/download_macula_greek.py`, `scripts/build_macula_index.py`, `scripts/build_strongs_frequency.py`, `scripts/build_lexicon_index.py`
 
 ## Performance Considerations
