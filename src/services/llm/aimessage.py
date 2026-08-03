@@ -139,11 +139,3 @@ class AIMessage:
         self.error_text = error
         if not self.response_at:
             self.response_at = datetime.now()
-
-    def is_successful(self) -> bool:
-        """Check if message was successful"""
-        return self.raw_response is not None and self.error_text is None
-
-    def max_retries_exceeded(self, max_retries: int) -> bool:
-        """Check if max retries have been exceeded"""
-        return self.num_tries >= max_retries

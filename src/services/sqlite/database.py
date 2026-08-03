@@ -47,26 +47,7 @@ class ChatDatabase:
             (session_uuid, name, created_by)
         )
         return session_uuid
-    
-    def create_message(self, session_uuid: str, input_text: str, output_text: str) -> str:
-        """DEPRECATED: Use create_message_with_type instead.
-        Create a new message in a session.
-        
-        Args:
-            session_uuid: UUID of the session
-            input_text: User input message
-            output_text: AI response message
-            
-        Returns:
-            UUID of the created message
-        """
-        message_uuid = str(uuid.uuid4())
-        self._execute_write(
-            "INSERT INTO messages (uuid, session_uuid, unique_prompt, raw_response) VALUES (?, ?, ?, ?)",
-            (message_uuid, session_uuid, input_text, output_text)
-        )
-        return message_uuid
-    
+
     def get_message_type(self, slug: str) -> Optional[Dict[str, Any]]:
         """Get message type configuration by slug.
         
@@ -129,93 +110,9 @@ class ChatDatabase:
         
         return message_uuid
     
-    def get_message_by_uuid(self, message_uuid: str) -> Optional[Dict[str, Any]]:
-        """Get message by UUID with full details.
-        
-        Args:
-            message_uuid: UUID of the message
-            
-        Returns:
-            Message dict or None if not found
-        """
-        self.cursor.execute("""
-            SELECT m.uuid, m.session_uuid, m.message_type_slug, m.unique_prompt,
-                   m.raw_response, m.created_at, m.response_at, m.num_tries, m.error_text,
-                   mt.step_name, mt.creator_type, mt.model_slug
-            FROM messages m
-            LEFT JOIN ref_message_types mt ON m.message_type_slug = mt.slug
-            WHERE m.uuid = ?
-        """, (message_uuid,))
-        
-        result = self.cursor.fetchone()
-        if not result:
-            return None
-            
-        return {
-            'uuid': result[0],
-            'session_uuid': result[1],
-            'message_type_slug': result[2],
-            'unique_prompt': result[3],
-            'raw_response': result[4],
-            'created_at': datetime.fromisoformat(result[5]),
-            'response_at': datetime.fromisoformat(result[6]) if result[6] else None,
-            'num_tries': result[7],
-            'error_text': result[8],
-            'step_name': result[9],
-            'creator_type': result[10],
-            'model_slug': result[11]
-        }
+
     
-    def get_messages_by_session_and_type(self, session_uuid: str, message_type_slug: str = None) -> List[Dict[str, Any]]:
-        """Get messages for a session, optionally filtered by message type.
-        
-        Args:
-            session_uuid: UUID of the session
-            message_type_slug: Optional message type slug filter
-            
-        Returns:
-            List of message dicts
-        """
-        if message_type_slug:
-            self.cursor.execute("""
-                SELECT m.uuid, m.session_uuid, m.message_type_slug, m.unique_prompt,
-                       m.raw_response, m.created_at, m.response_at, m.num_tries, m.error_text,
-                       mt.step_name, mt.creator_type, mt.model_slug
-                FROM messages m
-                LEFT JOIN ref_message_types mt ON m.message_type_slug = mt.slug
-                WHERE m.session_uuid = ? AND m.message_type_slug = ?
-                ORDER BY m.created_at
-            """, (session_uuid, message_type_slug))
-        else:
-            self.cursor.execute("""
-                SELECT m.uuid, m.session_uuid, m.message_type_slug, m.unique_prompt,
-                       m.raw_response, m.created_at, m.response_at, m.num_tries, m.error_text,
-                       mt.step_name, mt.creator_type, mt.model_slug
-                FROM messages m
-                LEFT JOIN ref_message_types mt ON m.message_type_slug = mt.slug
-                WHERE m.session_uuid = ?
-                ORDER BY m.created_at
-            """, (session_uuid,))
-        
-        results = self.cursor.fetchall()
-        messages = []
-        for result in results:
-            messages.append({
-                'uuid': result[0],
-                'session_uuid': result[1],
-                'message_type_slug': result[2],
-                'unique_prompt': result[3],
-                'raw_response': result[4],
-                'created_at': datetime.fromisoformat(result[5]),
-                'response_at': datetime.fromisoformat(result[6]) if result[6] else None,
-                'num_tries': result[7],
-                'error_text': result[8],
-                'step_name': result[9],
-                'creator_type': result[10],
-                'model_slug': result[11]
-            })
-        
-        return messages
+
     
     def get_active_message_types(self) -> List[Dict[str, Any]]:
         """Get all active message types.
@@ -250,43 +147,11 @@ class ChatDatabase:
         
         return message_types
     
-    def get_session_name(self, session_uuid: str) -> Optional[str]:
-        """Get session name by UUID.
-        
-        Args:
-            session_uuid: UUID of the session
-            
-        Returns:
-            Session name or None if not found
-        """
-        self.cursor.execute("SELECT name FROM sessions WHERE uuid = ?", (session_uuid,))
-        result = self.cursor.fetchone()
-        return result[0] if result else None
+
     
-    def get_sessions(self) -> List[Tuple[str, str, str]]:
-        """Get all sessions ordered by creation time.
-        
-        Returns:
-            List of (uuid, name, created_on) tuples
-        """
-        self.cursor.execute("SELECT uuid, name, created_on FROM sessions ORDER BY created_on DESC")
-        return self.cursor.fetchall()
+
     
-    def get_messages(self, session_uuid: str) -> List[Tuple[str, str, str, str]]:
-        """DEPRECATED: Use get_messages_by_session_and_type instead.
-        Get all messages for a session.
-        
-        Args:
-            session_uuid: UUID of the session
-            
-        Returns:
-            List of (uuid, input, output, created_on) tuples
-        """
-        self.cursor.execute(
-            "SELECT uuid, unique_prompt, raw_response, created_at FROM messages WHERE session_uuid = ? ORDER BY created_at",
-            (session_uuid,)
-        )
-        return self.cursor.fetchall()
+
     
     def close(self):
         """Close the database connection."""

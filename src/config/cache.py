@@ -25,7 +25,9 @@ class GlobalReferenceCache:
     def reset(cls, db_path: Optional[str] = None):
         """Clear the singleton and re-instantiate, optionally against a new DB path.
 
-        Intended for fixture tests that need the cache pointed at a temp database.
+        Test-only helper: required by fixture tests that point the singleton
+        cache at a temp database before each test. Not part of the production
+        API; production code uses the singleton as-is.
         """
         cls._instance = None
         cls._initialized = False
@@ -49,27 +51,9 @@ class GlobalReferenceCache:
             message_types = self.db.get_active_message_types()
             for msg_type in message_types:
                 self.ref_message_types[msg_type['slug']] = msg_type
-    
     def get_message_type(self, slug: str) -> Optional[Dict[str, Any]]:
         """Get message type from cache"""
         return self.ref_message_types.get(slug)
-    
-    def get_all_message_types(self) -> Dict[str, Dict[str, Any]]:
-        """Get all message types from cache"""
-        return self.ref_message_types.copy()
-    
-    def refresh_cache(self):
-        """Refresh all cached data"""
-        self._initialize_cache()
-    
-    def add_message_type(self, message_type: Dict[str, Any]):
-        """Add new message type to cache"""
-        self.ref_message_types[message_type['slug']] = message_type
-    
-    def invalidate_message_type(self, slug: str):
-        """Invalidate specific message type cache"""
-        if slug in self.ref_message_types:
-            del self.ref_message_types[slug]
     
     def close(self):
         """Close the underlying database connection if it is open."""
