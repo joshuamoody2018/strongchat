@@ -407,14 +407,18 @@ class TestContextRetrievalOffline(unittest.TestCase):
         # Query with the session UUID used by the mock
         if context_service_calls:
             _, used_session_uuid = context_service_calls[0]
-            rows = self.runner.db.get_messages_by_session_and_type(
-                used_session_uuid, "context_retrieval"
-            )
+            self.runner.db.cursor.execute("""
+                SELECT uuid, session_uuid, message_type_slug, unique_prompt,
+                       raw_response, created_at, response_at, num_tries, error_text
+                FROM messages 
+                WHERE session_uuid = ? AND message_type_slug = ?
+            """, (used_session_uuid, "context_retrieval"))
+            rows = self.runner.db.cursor.fetchall()
         else:
             rows = []
         self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["message_type_slug"], "context_retrieval")
-        self.assertIsNone(rows[0]["error_text"])
+        self.assertEqual(rows[0][2], "context_retrieval")  # message_type_slug
+        self.assertIsNone(rows[0][8])  # error_text
 
         # Close the runner after all assertions
         self.runner.close()

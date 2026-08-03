@@ -355,7 +355,6 @@ class TestLLMWrapperRetry(unittest.TestCase):
         """Create a fresh fixture DB and a wrapper instance."""
         os.environ["OPENROUTER_API_KEY"] = "dummy-key-for-offline-tests"
         self._tmp, self.db_path = _create_fixture_db()
-        GlobalReferenceCache.reset(self.db_path)
         self.wrapper = LLMWrapper(self.db_path)
         self.session_uuid = self.wrapper.db.create_session(name="wrapper-test")
 
@@ -405,13 +404,18 @@ class TestLLMWrapperRetry(unittest.TestCase):
         self.assertEqual(aimessage.num_tries, 3)
         self.assertIsNotNone(aimessage.raw_response)
 
-        rows = self.wrapper.db.get_messages_by_session_and_type(
-            self.session_uuid, "intent_generation"
-        )
+        # Check message was recorded
+        self.wrapper.db.cursor.execute("""
+            SELECT uuid, session_uuid, message_type_slug, unique_prompt,
+                   raw_response, created_at, response_at, num_tries, error_text
+            FROM messages 
+            WHERE session_uuid = ? AND message_type_slug = ?
+        """, (self.session_uuid, "intent_generation"))
+        rows = self.wrapper.db.cursor.fetchall()
         self.assertEqual(len(rows), 1)
-        self.assertIsNotNone(rows[0]["raw_response"])
-        self.assertIsNone(rows[0]["error_text"])
-        self.assertEqual(rows[0]["num_tries"], 3)
+        self.assertIsNotNone(rows[0][4])
+        self.assertIsNone(rows[0][8])
+        self.assertEqual(rows[0][7], 3)
 
     def test_retry_persistent_failure_records_error(self):
         """Persistent transient failure raises MaxRetriesExceededError."""
@@ -436,17 +440,22 @@ class TestLLMWrapperRetry(unittest.TestCase):
                             "test prompt",
                             self.session_uuid,
                         )
-                    )
+         )
 
-        rows = self.wrapper.db.get_messages_by_session_and_type(
-            self.session_uuid, "intent_generation"
-        )
+         # Check failure was recorded with direct query
+        self.wrapper.db.cursor.execute("""
+            SELECT uuid, session_uuid, message_type_slug, unique_prompt,
+                   raw_response, created_at, response_at, num_tries, error_text
+            FROM messages 
+            WHERE session_uuid = ? AND message_type_slug = ?
+        """, (self.session_uuid, "intent_generation"))
+        rows = self.wrapper.db.cursor.fetchall()
         self.assertEqual(len(rows), 1)
-        self.assertIsNone(rows[0]["raw_response"])
-        self.assertIsNotNone(rows[0]["error_text"])
+        self.assertIsNone(rows[0][4])
+        self.assertIsNotNone(rows[0][8])
         # num_tries starts at 1 and is incremented once per attempt,
         # including the final failed attempt.
-        self.assertEqual(rows[0]["num_tries"], 4)
+        self.assertEqual(rows[0][7], 4)
 
 
 class TestEmbeddingServiceRetry(unittest.TestCase):
@@ -456,7 +465,6 @@ class TestEmbeddingServiceRetry(unittest.TestCase):
         """Create a fresh fixture DB and point the cache at it."""
         os.environ["OPENROUTER_API_KEY"] = "dummy-key-for-offline-tests"
         self._tmp, self.db_path = _create_fixture_db()
-        GlobalReferenceCache.reset(self.db_path)
 
     def tearDown(self):
         """Drop the temp directory."""
@@ -493,7 +501,6 @@ class TestHydePartialFailure(unittest.TestCase):
         """Create a fresh fixture DB and a HydeService instance."""
         os.environ["OPENROUTER_API_KEY"] = "dummy-key-for-offline-tests"
         self._tmp, self.db_path = _create_fixture_db()
-        GlobalReferenceCache.reset(self.db_path)
         self.service = HydeService(self.db_path)
         self.session_uuid = self.service.db.create_session(name="hyde-test")
 
@@ -538,11 +545,18 @@ class TestHydePartialFailure(unittest.TestCase):
         self.assertEqual(errors[0]["intent_id"], "comfort")
         self.assertIn("error", errors[0])
 
-        rows = self.service.db.get_messages_by_session_and_type(
-            self.session_uuid, "hyde_generation"
-        )
+
+
+        # Check messages were recorded
+        self.service.db.cursor.execute("""
+            SELECT uuid, session_uuid, message_type_slug, unique_prompt,
+                   raw_response, created_at, response_at, num_tries, error_text
+            FROM messages 
+            WHERE session_uuid = ? AND message_type_slug = ?
+        """, (self.session_uuid, "hyde_generation"))
+        rows = self.service.db.cursor.fetchall()
         self.assertEqual(len(rows), 2)
-        error_rows = [r for r in rows if r["error_text"] is not None]
+        error_rows = [r for r in rows if r[8] is not None]
         self.assertEqual(len(error_rows), 1)
 
 

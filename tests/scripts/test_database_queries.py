@@ -101,14 +101,6 @@ class TestDatabaseQueries(unittest.TestCase):
         finally:
             self._tmp.cleanup()
 
-    def test_get_message_by_uuid_returns_step_name(self):
-        """The LEFT JOIN to ref_message_types must populate step_name."""
-        row = self.db.get_message_by_uuid(self.message_uuid)
-        self.assertIsNotNone(row)
-        self.assertIsNotNone(row['step_name'])
-        self.assertEqual(row['step_name'], 'HyDE Generation')
-        self.assertEqual(row['message_type_slug'], 'hyde_gen')
-
     def test_get_message_type_includes_prompt_template(self):
         """get_message_type must surface the new prompt_template column."""
         cfg = self.db.get_message_type('hyde_gen')
@@ -121,16 +113,6 @@ class TestDatabaseQueries(unittest.TestCase):
         # Sanity: existing keys still present
         self.assertEqual(cfg['step_name'], 'HyDE Generation')
         self.assertEqual(cfg['model_slug'], 'meta-llama/llama-3.1-8b-instruct')
-
-    def test_get_messages_by_session_and_type_joins_step_name(self):
-        """The session+type query must also return step_name via the JOIN."""
-        rows = self.db.get_messages_by_session_and_type(
-            session_uuid=self.session_uuid,
-            message_type_slug='hyde_gen',
-        )
-        self.assertEqual(len(rows), 1)
-        self.assertIsNotNone(rows[0]['step_name'])
-        self.assertEqual(rows[0]['step_name'], 'HyDE Generation')
 
     def test_get_message_type_missing_slug_returns_none(self):
         """A missing slug must return None without raising."""

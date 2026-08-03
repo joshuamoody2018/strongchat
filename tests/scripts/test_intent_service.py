@@ -77,7 +77,6 @@ class TestIntentService(unittest.TestCase):
     def setUp(self):
         """Provide a dummy API key so LLMWrapper initializes offline."""
         os.environ['OPENROUTER_API_KEY'] = 'dummy_key_for_offline_tests'
-        GlobalReferenceCache.reset('data/chat_database.db')
         self.service = IntentService()
 
     def _make_aimessage(self, raw_response: str) -> AIMessage:

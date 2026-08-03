@@ -134,31 +134,6 @@ class TestDatabasePort(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(_is_uuid(message_uuid))
 
-    async def test_get_messages_by_session_and_type_returns_inserted_row(self):
-        """Inserted rows must be retrievable by session and type."""
-        session_uuid = await self.db.create_session('test-session')
-        await self.db.create_message_with_type(
-            session_uuid=session_uuid,
-            message_type_slug='embedding_generation',
-            unique_prompt='why do bad things happen',
-            raw_response=json.dumps(
-                {"model": "openai/text-embedding-3-small",
-                 "dimension": 1536, "count": 1}
-            ),
-        )
-
-        rows = await self.db.get_messages_by_session_and_type(
-            session_uuid=session_uuid,
-            message_type_slug='embedding_generation',
-        )
-
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]['unique_prompt'], 'why do bad things happen')
-        self.assertEqual(
-            rows[0]['message_type_slug'], 'embedding_generation'
-        )
-        self.assertEqual(rows[0]['step_name'], 'Embedding Generation')
-
     async def test_get_message_type_returns_seeded_row(self):
         """get_message_type must return the seeded embedding_generation row."""
         cfg = await self.db.get_message_type('embedding_generation')

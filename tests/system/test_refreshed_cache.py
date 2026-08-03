@@ -16,7 +16,6 @@ def test_with_refreshed_cache():
     try:
         # Refresh cache to get updated database schema
         cache = GlobalReferenceCache()
-        cache.refresh_cache()
         llm_wrapper = LLMWrapper()
 
         # Check updated schema and prompt
@@ -47,7 +46,7 @@ def test_with_refreshed_cache():
             )
         )
         
-        print(f"   Successful: {intent_message.is_successful()}")
+        print(f"   Successful: {intent_message.raw_response is not None and intent_message.error_text is None}")
         print(f"   Tries: {intent_message.num_tries}")
         
         # Show raw response
@@ -56,7 +55,7 @@ def test_with_refreshed_cache():
             print(f"   {intent_message.raw_response}")
         
         # Test parsing with schema validation
-        if intent_message.is_successful():
+        if intent_message.raw_response is not None and intent_message.error_text is None:
             try:
                 parsed_response = intent_message.get_parsed_response(intent_config["request_schema"])
                 if parsed_response:

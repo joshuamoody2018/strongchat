@@ -44,7 +44,7 @@ def test_real_api_with_json():
             )
         )
         
-        print(f"   Successful: {intent_message.is_successful()}")
+        print(f"   Successful: {intent_message.raw_response is not None and intent_message.error_text is None}")
         print(f"   Tries: {intent_message.num_tries}")
         
         # Show raw response
@@ -53,7 +53,7 @@ def test_real_api_with_json():
             print(f"   {intent_message.raw_response}")
         
         # Test parsing with schema validation
-        if intent_message.is_successful():
+        if intent_message.raw_response is not None and intent_message.error_text is None:
             try:
                 parsed_response = intent_message.get_parsed_response(intent_config["request_schema"])
                 if parsed_response:

@@ -119,7 +119,6 @@ class TestEmbeddingService(unittest.TestCase):
             )
             conn.commit()
 
-        GlobalReferenceCache.reset(self.db_path)
         self.service = EmbeddingService(self.db_path)
         self.session_uuid = self.service.db.create_session(name="embedding-test")
 
@@ -171,16 +170,20 @@ class TestEmbeddingService(unittest.TestCase):
         self.assertEqual(state["calls"], 3)
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0], deterministic_vector("first"))
-        self.assertEqual(result[1], deterministic_vector("second"))
+        self.assertEqual(result[1], deterministic_vector("second")        )
 
-        messages = service.db.get_messages_by_session_and_type(
-            session_uuid=self.session_uuid,
-            message_type_slug="embedding_generation",
-        )
+        # Check message was recorded
+        service.db.cursor.execute("""
+            SELECT uuid, session_uuid, message_type_slug, unique_prompt,
+                   raw_response, created_at, response_at, num_tries, error_text
+            FROM messages 
+            WHERE session_uuid = ? AND message_type_slug = ?
+        """, (self.session_uuid, "embedding_generation"))
+        messages = service.db.cursor.fetchall()
         self.assertEqual(len(messages), 1)
-        self.assertEqual(messages[0]["num_tries"], 3)
-        self.assertIsNotNone(messages[0]["raw_response"])
-        self.assertIsNone(messages[0]["error_text"])
+        self.assertEqual(messages[0][7], 3)
+        self.assertIsNotNone(messages[0][4])
+        self.assertIsNone(messages[0][8])
 
     def test_retry_exhaustion_raises_max_retries_exceeded(self):
         """If all retries fail, MaxRetriesExceededError is raised."""
@@ -208,15 +211,19 @@ class TestEmbeddingService(unittest.TestCase):
 
         self.assertEqual(state["calls"], 3)
 
-        messages = service.db.get_messages_by_session_and_type(
-            session_uuid=self.session_uuid,
-            message_type_slug="embedding_generation",
-        )
+        # Check failure was recorded with direct query
+        service.db.cursor.execute("""
+            SELECT uuid, session_uuid, message_type_slug, unique_prompt,
+                   raw_response, created_at, response_at, num_tries, error_text
+            FROM messages
+            WHERE session_uuid = ? AND message_type_slug = ?
+        """, (self.session_uuid, "embedding_generation"))
+        messages = service.db.cursor.fetchall()
         self.assertEqual(len(messages), 1)
-        self.assertEqual(messages[0]["num_tries"], 3)
-        self.assertIsNone(messages[0]["raw_response"])
-        self.assertIsNotNone(messages[0]["error_text"])
-        self.assertIn("failed after", messages[0]["error_text"])
+        self.assertEqual(messages[0][7], 3)
+        self.assertIsNone(messages[0][4])
+        self.assertIsNotNone(messages[0][8])
+        self.assertIn("failed after", messages[0][8])
 
     def test_recording_stores_summary_not_vectors(self):
         """A recorded message must contain dimension/count, never embeddings."""
@@ -228,12 +235,16 @@ class TestEmbeddingService(unittest.TestCase):
             service.embed_texts(texts, session_uuid=self.session_uuid, record=True)
         )
 
-        messages = service.db.get_messages_by_session_and_type(
-            session_uuid=self.session_uuid,
-            message_type_slug="embedding_generation",
-        )
+        # Check message was recorded with direct query
+        service.db.cursor.execute("""
+            SELECT uuid, session_uuid, message_type_slug, unique_prompt,
+                   raw_response, created_at, response_at, num_tries, error_text
+            FROM messages 
+            WHERE session_uuid = ? AND message_type_slug = ?
+        """, (self.session_uuid, "embedding_generation"))
+        messages = service.db.cursor.fetchall()
         self.assertEqual(len(messages), 1)
-        raw_response = messages[0]["raw_response"]
+        raw_response = messages[0][4]
         self.assertIsNotNone(raw_response)
         self.assertIn("dimension", raw_response)
         # The model slug itself contains "embedding", so assert the summary
@@ -254,10 +265,14 @@ class TestEmbeddingService(unittest.TestCase):
             service.embed_texts(texts, session_uuid=self.session_uuid, record=False)
         )
 
-        messages = service.db.get_messages_by_session_and_type(
-            session_uuid=self.session_uuid,
-            message_type_slug="embedding_generation",
-        )
+        # Check no message was inserted
+        service.db.cursor.execute("""
+            SELECT uuid, session_uuid, message_type_slug, unique_prompt,
+                   raw_response, created_at, response_at, num_tries, error_text
+            FROM messages
+            WHERE session_uuid = ? AND message_type_slug = ?
+        """, (self.session_uuid, "embedding_generation"))
+        messages = service.db.cursor.fetchall()
         self.assertEqual(len(messages), 0)
 
 

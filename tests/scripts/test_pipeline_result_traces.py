@@ -366,7 +366,6 @@ class TestPipelineRunnerPopulatesTraces(unittest.TestCase):
     def setUp(self):
         """Create a fresh fixture DB and reset the cache."""
         self._tmp, self.db_path = _create_fixture_db()
-        GlobalReferenceCache.reset(self.db_path)
 
     def tearDown(self):
         """Drop the temp directory."""

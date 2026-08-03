@@ -15,7 +15,6 @@ def test_final_system():
 
     try:
         cache = GlobalReferenceCache()
-        cache.refresh_cache()
         llm_wrapper = LLMWrapper()
 
         intent_config = cache.get_message_type("intent_classification")
@@ -42,9 +41,9 @@ def test_final_system():
                 )
             )
             
-            print(f"   Successful: {intent_message.is_successful()}")
+            print(f"   Successful: {intent_message.raw_response is not None and intent_message.error_text is None}")
             
-            if intent_message.is_successful():
+            if intent_message.raw_response is not None and intent_message.error_text is None:
                 try:
                     parsed_response = intent_message.get_parsed_response(intent_config["request_schema"])
                     if parsed_response:

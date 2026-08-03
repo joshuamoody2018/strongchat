@@ -149,8 +149,6 @@ class TestRetrievalService(unittest.TestCase):
             )
             conn.commit()
 
-        GlobalReferenceCache.reset(self.db_path)
-
         self.embedding_service = EmbeddingService(self.db_path, embed_fn=embed_fn)
         self.verse_store = VerseStore(path=self.chroma_path)
         self._seed_collections()
@@ -276,14 +274,18 @@ class TestRetrievalService(unittest.TestCase):
                 top_k=3,
                 translations=("kjv",),
             )
-        )
+         )
 
-        messages = self.service.db.get_messages_by_session_and_type(
-            session_uuid=self.session_uuid,
-            message_type_slug="embedding_generation",
-        )
+        # Check message was recorded
+        self.service.db.cursor.execute("""
+            SELECT uuid, session_uuid, message_type_slug, unique_prompt,
+                   raw_response, created_at, response_at, num_tries, error_text
+            FROM messages 
+            WHERE session_uuid = ? AND message_type_slug = ?
+        """, (self.session_uuid, "embedding_generation"))
+        messages = self.service.db.cursor.fetchall()
         self.assertEqual(len(messages), 1)
-        parsed = json.loads(messages[0]["raw_response"])
+        parsed = json.loads(messages[0][4])
         self.assertEqual(parsed["model"], MODEL_SLUG)
         self.assertEqual(parsed["dimension"], DIMENSION)
         self.assertEqual(parsed["count"], 2)
