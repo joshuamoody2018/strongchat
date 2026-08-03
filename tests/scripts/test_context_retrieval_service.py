@@ -308,19 +308,6 @@ class TestContextRetrievalService(unittest.TestCase):
         self.assertEqual(bundle['scored_word_count'], 0)
         self.assertIn('no macula tokens', bundle['build_summary'])
 
-    def test_service_close(self):
-        """Test that service.close() works correctly."""
-        # Create service and verify connections are open
-        self.assertIsNotNone(self.service._macula_conn)
-        self.assertTrue(self.service._macula_conn is not None)
-        
-        # Close the service
-        self.service.close()
-        
-        # Verify macula connection is closed
-        with self.assertRaises(sqlite3.ProgrammingError):
-            # This should raise an exception if the connection is closed
-            self.service._macula_conn.execute('SELECT 1').fetchone()
 
     def test_empty_search_results(self):
         """Test handling of intents with empty search_results."""

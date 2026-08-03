@@ -180,10 +180,6 @@ def _make_hit(reference: str, distance: float, translation: str = "kjv") -> dict
 class TestIntentTraceDataclass(unittest.TestCase):
     """Pure dataclass-shape tests for IntentTrace."""
 
-    def test_intent_trace_is_importable(self):
-        """IntentTrace is exposed from runner and importable."""
-        self.assertTrue(callable(IntentTrace))
-
     def test_intent_trace_default_construction(self):
         """IntentTrace can be constructed with the minimum required fields."""
         trace = IntentTrace(

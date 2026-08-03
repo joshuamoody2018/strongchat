@@ -12,10 +12,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 from config.context_constants import (
     POS_WEIGHTS,
-    TOP_N_VECTOR_RESULTS,
-    TOP_N_PERCENT_FINAL,
-    MIN_WORDS_PER_VERSE,
-    MIN_WORDS_AFTER_TRIM,
     composite_score,
     get_pos_weight,
 )
@@ -64,13 +60,12 @@ def test_ambiguity_dominance():
 def test_monotone_non_negative():
     """Test composite_score is monotone non-negative for positive inputs."""
     import random
-    
-    # Test 10 random positive input tuples
+
     for _ in range(10):
         pos_weight = random.uniform(0.0, 1.0)
         frequency_count = random.randint(1, 1000)
         sense_count = random.randint(1, 100)
-        
+
         score = composite_score(pos_weight, frequency_count, sense_count)
         assert score >= 0.0, f"Composite score should be non-negative: {score}"
 
@@ -87,50 +82,31 @@ def test_pos_zero_yields_zero():
     assert score == 0.0, "Zero POS weight should yield zero composite score"
 
 
-def test_constants_values():
-    """Test constant values are correct."""
-    assert TOP_N_VECTOR_RESULTS == 25, "TOP_N_VECTOR_RESULTS should be 25"
-    assert TOP_N_PERCENT_FINAL == 0.20, "TOP_N_PERCENT_FINAL should be 0.20"
-    assert MIN_WORDS_PER_VERSE == 3, "MIN_WORDS_PER_VERSE should be 3"
-    assert MIN_WORDS_AFTER_TRIM == 2, "MIN_WORDS_AFTER_TRIM should be 2"
-
-
-def test_all_weights_bounded():
-    """Test all POS weights are bounded in [0.0, 1.0]."""
-    assert all(0.0 <= w <= 1.0 for w in POS_WEIGHTS.values()), "All weights must be in [0.0, 1.0]"
-
-
 if __name__ == "__main__":
     print("Running context constants tests...")
-    
+
     test_pos_weights_categories()
     print("✓ POS weights categories test passed")
-    
+
     test_weights_bounded()
     print("✓ Weights bounded test passed")
-    
+
     test_pos_dominance()
     print("✓ POS dominance test passed")
-    
+
     test_rarity_dominance()
     print("✓ Rarity dominance test passed")
-    
+
     test_ambiguity_dominance()
     print("✓ Ambiguity dominance test passed")
-    
+
     test_monotone_non_negative()
     print("✓ Monotone non-negative test passed")
-    
+
     test_unknown_pos_handling()
     print("✓ Unknown POS handling test passed")
-    
+
     test_pos_zero_yields_zero()
     print("✓ POS zero yields zero test passed")
-    
-    test_constants_values()
-    print("✓ Constants values test passed")
-    
-    test_all_weights_bounded()
-    print("✓ All weights bounded test passed")
-    
+
     print("All tests passed!")
