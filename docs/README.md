@@ -38,7 +38,7 @@ StrongChat is a biblical search system using LLMs with two-level RRF (Reciprocal
   - JSON schema validation for responses
   - Error routing to stderr
   - Type-safe response models
-- **Location**: `architecture/llm-framework.md`
+- **Location**: `/llm-framework.md`
 - **Test Status**: ✅ Parser tests passing
 
 #### Database Layer (`src/services/sqlite/`)
@@ -55,7 +55,7 @@ StrongChat is a biblical search system using LLMs with two-level RRF (Reciprocal
 - **Components**:
   - JSON schemas for response validation
   - Pipeline-agnostic prompt templates
-- **Location**: `architecture/llm-framework.md`
+- **Location**: `/llm-framework.md`
 
 #### Intent Generation Service (`src/services/intent/`)
 - **Purpose**: Plain-language query disambiguation (step 2)

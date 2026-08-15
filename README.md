@@ -102,7 +102,7 @@ Top-level tests in `tests/` are runnable with `unittest`:
 
 ## Documentation
 
-- `architecture/high-level.md` — 13-step pipeline overview
-- `architecture/reference.md` — agent workflow and integration
-- `architecture/implementation-status.md` — current progress tracking
+- `docs/high-level.md` — 13-step pipeline overview
+- `docs/reference.md` — agent workflow and integration
+- `docs/implementation-status.md` — current progress tracking
 - `todo.md` — implementation backlog and next steps

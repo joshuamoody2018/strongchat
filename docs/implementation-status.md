@@ -1,30 +1,10 @@
-# StrongChat Pipeline Architecture
+# Pipeline Implementation Status
 
-## 13-Step Pipeline Overview
+## Current Implementation Status
 
-1. **Input** — User's raw text
-2. ✅ **Intent Generation** — LLM produces N candidate topic/theme framings (auditable inference point)
-3. ✅ **HyDE Generation** — M hypothetical passages per intent (N×M total documents)
-4. ✅ **Parallel Retrieval** — Embed each HyDE doc, search against English translations, top-K per doc
-5. **RRF Level 1** — Merge/rerank M result sets within each intent → one ranked list per intent
-6. **RRF Level 2** — Merge/rerank N per-intent lists → single candidate verse set
-7. ✅ **Macula Lookup** — Pull lemma/Strong's data for candidate set (NT: Macula Greek, OT: TBD)
-8. **Graph Expansion** — Lemma-based/verse-graph traversal for cross-references
-9. ✅ **Re-rank/Organize** — Consolidate steps 6-8 into structured retrieval set
-10. **Synthesis** — Frontier model answers using retrieval + original prompt, citations linked
-11. **Evaluator** — Fresh LLM checks completeness, loops back to step 2/3 if insufficient
-12. **Validator** — Programmatic + Bible-trained LLM fact-check, strips unsupported claims
-13. **Response** — Final response to user
+### ✅ Completed Components
 
-## Core Principle
-
-**English carries semantic search (steps 3-6), original language carries support/grounding (steps 7-8)** — not the other way around.
-
-## Implementation Status
-
-### ✅ Implemented Components
-
-#### LLM Framework (`src/services/llm/`)
+#### 1. LLM Framework
 - **Status**: ✅ Complete
 - **Location**: `src/services/llm/`
 - **Components**:
@@ -34,9 +14,9 @@
   - Error routing to stderr
   - Response parser with validation (`AIMessage`, `parse_response`)
 - **Testing**: ✅ 6/6 parser tests passing, offline/online service tests passing
-- **Documentation**: ✅ Comprehensive docs in `architecture/llm-framework.md`
+- **Documentation**: ✅ Comprehensive docs in `/llm-framework.md`
 
-#### Database Layer (`src/services/sqlite/`)
+#### 2. Database Layer
 - **Status**: ✅ Complete
 - **Location**: `src/services/sqlite/`
 - **Components**:
@@ -47,7 +27,7 @@
 - **Testing**: ✅ CRUD operations validated, migration tests passing
 - **Database**: ✅ Schema implemented and tested
 
-#### Configuration System
+#### 3. Configuration System
 - **Status**: ✅ Complete
 - **Location**: `src/config/`
 - **Components**:
@@ -55,7 +35,7 @@
   - Pipeline-agnostic prompt templates (`prompts.py`)
   - Centralized configuration management
 
-#### Intent Generation Service (`src/services/intent/`)
+#### 4. Intent Generation Service
 - **Status**: ✅ Complete
 - **Location**: `src/services/intent/`, `src/config/schemas.py`, `src/config/prompts.py`
 - **Components**:
@@ -64,7 +44,7 @@
   - Records one `intent_generation` message per call
 - **Testing**: ✅ Offline mocked test + live system test passing
 
-#### HyDE Generation Service (`src/services/hyde/`)
+#### 5. HyDE Generation Service
 - **Status**: ✅ Complete
 - **Location**: `src/services/hyde/`
 - **Components**:
@@ -74,7 +54,7 @@
   - Parallel generation via `asyncio.gather`, per-intent failure capture
 - **Testing**: ✅ Offline and live tests passing
 
-#### Embeddings Service (`src/services/embeddings/`)
+#### 6. Embeddings Service
 - **Status**: ✅ Complete
 - **Location**: `src/services/embeddings/`
 - **Components**:
@@ -84,7 +64,7 @@
   - Records one summary `embedding_generation` message per call (no raw vectors)
 - **Testing**: ✅ Offline tests passing
 
-#### Verse Store / Corpus Ingest (`src/services/vectordb/`, `scripts/ingest_corpus.py`)
+#### 7. Verse Store / Corpus Ingest
 - **Status**: ✅ Complete
 - **Location**: `src/services/vectordb/`, `scripts/ingest_corpus.py`
 - **Components**:
@@ -94,7 +74,7 @@
   - `corpus_ingest` summary message recorded after each translation ingest
 - **Testing**: ✅ Full KJV + WEB ingest verified, semantic check passes
 
-#### Retrieval Service (`src/services/retrieval/`)
+#### 8. Retrieval Service
 - **Status**: ✅ Complete
 - **Location**: `src/services/retrieval/`
 - **Components**:
@@ -104,7 +84,7 @@
   - Returns structured hits with `id`, `text`, `reference`, `distance`
 - **Testing**: ✅ Offline tests passing
 
-#### Pipeline Orchestrator (`src/services/pipeline/`, `src/main.py`)
+#### 9. Pipeline Orchestrator
 - **Status**: ✅ Complete
 - **Location**: `src/services/pipeline/`, `src/main.py`
 - **Components**:
@@ -113,17 +93,17 @@
   - CLI runner: `src/main.py`
 - **Testing**: ✅ Live end-to-end test passing
 
-#### Context Retrieval (`src/services/context/`)
+#### 10. Context Retrieval
 - **Status**: ✅ Complete (committed 2026-08-02)
 - **Location**: `src/services/context/`
 - **Message type**: `context_retrieval` (programmatic, summary schema)
 - **Test files**: `tests/scripts/test_context_retrieval_service.py`, `tests/scripts/test_context_retrieval_offline.py`, `tests/system/test_context_retrieval_e2e.py`
-- **Score formula**: `composite_score(pos_weight, frequency_count, sense_count) = pos_weight * log1p(1/frequency_count) * log1p(sense_count)`
-- **KNOWN LIMITATION**: the `gloss` field on each kept_word is empty because the `macula_tokens` SQLite schema does not include the `gloss` column from the canonical TSV.
+- **Score formula**: cite `composite_score(pos_weight, frequency_count, sense_count) = pos_weight * log1p(1/frequency_count) * log1p(sense_count)` from `src/config/context_constants.py`
+- **KNOWN LIMITATION**: the `gloss` field on each kept_word is empty because todo 3's `macula_tokens` SQLite schema does not include the `gloss` column from the canonical TSV. Flagged for a follow-up "fix macula schema" plan.
 
 ### 📋 Planned Components
 
-#### RRF Implementation
+#### 1. RRF Implementation
 - **Status**: 📋 Planned
 - **Location**: `src/services/rrf/` (planned)
 - **Requirements**:
@@ -131,7 +111,7 @@
   - Cross-intent merging (step 6)
   - Score normalization and fusion
 
-#### Synthesis, Evaluation, and Validation
+#### 2. Synthesis, Evaluation, and Validation
 - **Status**: 📋 Planned
 - **Requirements**:
   - Response synthesis (step 10)
@@ -139,21 +119,94 @@
   - Fact validation (step 12)
   - Final response (step 13)
 
-## Setup
+## Task Tracking
 
-Run the setup script to create a Python environment and ingest all data:
+### todo-next.md
+- ✅ Framework implementation
+- ✅ Intent service integration
+- ✅ HyDE schema + prompt
+- ✅ Embeddings service
+- ✅ Retrieval service
+- ✅ Corpus/vector store
+- ✅ Pipeline orchestrator
+- 📋 RRF implementation
+- 📋 Macula integration
+- 📋 Synthesis / evaluator / validator
 
-```bash
-bash scripts/setup_environment.sh
-```
+### todo-deferred.md
+- Error handling improvements
+- Async database operations
+- Performance optimizations
+- Production readiness features
+- Testing infrastructure expansion
+- Deployment automation
 
-## Detailed Documentation
+## Critical Dependencies
 
-See [architecture reference](reference.md) for component details and integration points.
+### 1. Intent Generation → HyDE Generation
+- Intent service output required for HyDE input
+- Structured intents with `intent_id`, `interpretation`, `keywords_*`, `themes` needed for N×M generation
 
-- [LLM Framework](llm-framework.md) - Structured LLM interactions
-- [Database](database.md) - Data storage and operations
-- [HyDE Retrieval Pipeline](pipeline-hyde-retrieval.md) - HyDE + retrieval pipeline (steps 2-4)
-- [Context Retrieval Pipeline](pipeline-context-retrieval.md) - Context retrieval pipeline (steps 7, 9)
-- [Implementation Status](implementation-status.md) - Current progress tracking
-- [Reference Guide](reference.md) - Agent workflow and integration
+### 2. HyDE Generation → Embeddings → Retrieval
+- HyDE documents feed `EmbeddingService.embed_texts`
+- `RetrievalService` queries `VerseStore` per `(doc, translation)` pair
+
+### 3. LLM Framework → All LLM Services
+- `LLMWrapper` provides validated, retry-aware LLM calls
+- Error handling and audit logging essential
+
+### 4. Database → All Services
+- `ChatDatabase` stores session and messages
+- `GlobalReferenceCache` loads `ref_message_types` rows
+- `BaseService` exposes shared wrapper, cache, and DB to every service
+
+## Risk Assessment
+
+### Low Risk
+- Database schema evolution
+- LLM framework integration
+- Configuration management
+- Intent/HyDE/retrieval pipeline
+
+### Medium Risk
+- JSON schema validation edge cases
+- Error handling robustness
+- RRF algorithm implementation
+
+### High Risk
+- Macula external dependencies
+- Synthesis/evaluator loop convergence
+- Pipeline step 5-13 integration timing
+
+## Success Metrics
+
+### Technical Metrics
+- ✅ Framework test coverage: 100%
+- ✅ Integration test coverage: live pipeline end-to-end passing
+- ✅ Pipeline step completion: 7/13 implemented (input, intent generation, HyDE generation, retrieval, Macula lookup, context retrieval, re-rank/organize)
+
+### Functional Metrics
+- ✅ Database operations: All working
+- ✅ Intent generation: Working and audited
+- ✅ HyDE generation: Working and audited
+- ✅ Embeddings: Working and audited
+- ✅ Retrieval: Working and audited
+- ✅ Context retrieval: Working and audited
+- 📋 End-to-end synthesis: In progress
+
+## Next Milestones
+
+### Short Term (1-2 weeks)
+1. Implement RRF ranking (steps 5-6)
+2. Update retrieval service to feed ranked results into synthesis
+
+### Medium Term (1-2 months)
+1. Implement response synthesis (step 10)
+2. Add evaluator loop (step 11)
+3. Add fact validation (step 12)
+4. Implement final response (step 13)
+
+### Long Term (3-6 months)
+1. Complete full pipeline integration (steps 5-13)
+2. Add production monitoring
+3. Optimize performance and scalability
