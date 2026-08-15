@@ -41,16 +41,29 @@
 - [x] 10. Add offline test for context retrieval within the full pipeline
 - [x] 11. Update architecture documentation for the context retrieval pipeline
 
-### Known Limitations / Follow-ups
-- Macula gloss column missing (todo 3 schema gap)
-- Thayer's substituted with LSJ (user-approved)
+### Macula schema follow-up ✅ (2026-08-16)
+- [x] Add `gloss` column to `macula_tokens` and re-ingest from TSV
+- [x] Fix strongs-key format mismatch between `lexicon_definitions` (was `G0976`)
+      and `macula_tokens`/`strongs_frequency` (bare int `976`): normalize at
+      ingest in `scripts/build_lexicon_index.py` (`normalize_strongs` helper)
+- [x] Add ingest-time format-drift validation that fails loudly on regression
+- [x] Add regression canaries to all 3 context-retrieval test files
+      (`definitions` non-empty, `gloss` non-empty, per-word schema validation)
 
 ## Next steps
 
 ### Short Term
-- Fix macula schema: add gloss column to macula_tokens and re-ingest
+- Fix stale online tests: 5 files in `tests/system/` (`test_intent.py`,
+  `test_json_api.py`, `test_real_api.py`, `test_refreshed_cache.py`,
+  `test_final_system.py`) reference the removed `intent_classification`
+  message-type slug (only `intent_generation` is seeded now). Either delete
+  them or rewrite them against the current `intent_generation` schema.
+- Fix `ContextRetrievalService` concurrency bug: a single shared
+  `sqlite3.connect(..., check_same_thread=False)` connection is touched by
+  parallel `asyncio.to_thread` calls without the declared `self._macula_lock`
+  being acquired anywhere. Causes intermittent `InterfaceError: bad parameter
+  or other API misuse` under live parallel intent processing.
 - Hebrew OT Macula integration (architecture/high-level.md notes 'OT: TBD')
-- Verify the context_retrieval rows in live e2e tests against the FULL pipeline output
 
 ### Medium Term
 - Implement RRF ranking (steps 5-6)
@@ -62,3 +75,6 @@
 - Complete full pipeline integration (steps 5-13)
 - Add production monitoring
 - Optimize performance and scalability
+- Evaluate DB layer: keep SQLite with per-task short-lived connections, or
+  migrate to a server-style DB (Postgres) once concurrent load demands it
+  (see notes below)
