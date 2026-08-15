@@ -18,7 +18,7 @@ context-retrieval in progress, near completion 2026-08-02 (todos 1-10 complete; 
 
 ## Important Files
 * `README.md` - Dev environment setup (VPS-focused)
-* `LLM_FRAMEWORK.md` - LLM framework documentation and usage
+* `architecture/llm-framework.md` - LLM framework documentation and usage
 * `architecture/` - System design and architecture documentation
   * `high-level.md` - 13-step pipeline overview
   * `reference.md` - Agent workflow and integration

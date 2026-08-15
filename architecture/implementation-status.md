@@ -14,7 +14,7 @@
   - Error routing to stderr
   - Response parser with validation (`AIMessage`, `parse_response`)
 - **Testing**: ✅ 6/6 parser tests passing, offline/online service tests passing
-- **Documentation**: ✅ Comprehensive docs in `LLM_FRAMEWORK.md`
+- **Documentation**: ✅ Comprehensive docs in `architecture/llm-framework.md`
 
 #### 2. Database Layer
 - **Status**: ✅ Complete
