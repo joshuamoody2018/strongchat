@@ -5,9 +5,6 @@ context-retrieval in progress, near completion 2026-08-02 (todos 1-10 complete; 
 
 ## Project operational conventions
 - Use `.venv/bin/python` for everything.
-- One commit per todo with explicit-path staging (NEVER `git add -A`).
-- Never stage `.env`, `data/`, `*.pyc`, or files under `.venv/`; review `README.md` and `.gitignore` before staging.
-- Freeform sentence-case commit messages.
 - Every OpenRouter call recorded in `messages` linked to `ref_message_types`.
 - Test queries must NOT be biblical/christian/faith-specific. The system is general-purpose input → biblically-backed output, so tests should use non-biblical questions (themes may incidentally overlap scripture, but never ask "what does the Bible say about X" as a test).
 
