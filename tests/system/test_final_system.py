@@ -2,8 +2,11 @@
 """Test final concise prompt"""
 
 import asyncio
+import os
 import sys
-sys.path.insert(0, 'src')
+from dotenv import load_dotenv
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 from config.cache import GlobalReferenceCache
 from services.llm.wrapper import LLMWrapper
@@ -12,6 +15,12 @@ from services.llm.aimessage import AIMessage
 def test_final_system():
     """Test final system with concise prompt"""
     print("=== Testing Final Intent Classification System ===\n")
+
+    load_dotenv()
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key or api_key == "your_openrouter_api_key_here":
+        print("SKIP: OPENROUTER_API_KEY is not present in the environment.")
+        return
 
     try:
         cache = GlobalReferenceCache()
