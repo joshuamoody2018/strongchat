@@ -5,6 +5,7 @@ notes/
 *.env
 *.local
 config.local.json
+opencode.json
 
 # Temporary files
 *.tmp
