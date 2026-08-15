@@ -147,6 +147,55 @@ class TestContextRetrievalService(unittest.TestCase):
                     pos_tags = [w['pos'] for w in bundle['kept_words'] if w['pos']]
                     self.assertTrue(any(pos.startswith(('V-', 'N-')) for pos in pos_tags))
 
+                    # Assert every kept word has expected fields with correct
+                    # types and non-empty values where the contract demands it.
+                    for w in bundle['kept_words']:
+                        self.assertIsInstance(w['strongs'], str)
+                        self.assertTrue(w['strongs'],
+                                        "kept word strongs must be non-empty")
+                        self.assertIsInstance(w['surface'], str)
+                        self.assertTrue(w['surface'],
+                                        "kept word surface must be non-empty")
+                        self.assertIsInstance(w['lemma'], str)
+                        self.assertTrue(w['lemma'],
+                                        "kept word lemma must be non-empty")
+                        self.assertIsInstance(w['definitions'], list)
+                        self.assertIsInstance(w['gloss'], str)
+                        self.assertIsInstance(w['frequency_count'], int)
+                        self.assertGreater(w['frequency_count'], 0)
+                        self.assertIsInstance(w['sense_count'], int)
+                        self.assertGreaterEqual(w['sense_count'], 1)
+                        self.assertIsInstance(
+                            w['composite_score'], (int, float))
+                        self.assertGreater(w['composite_score'], 0)
+                        self.assertEqual(w['lexicon_source'], 'tbESG+LSJ')
+                        self.assertIsInstance(w['macula_occurrences'], int)
+                        self.assertGreaterEqual(w['macula_occurrences'], 1)
+                        # sense_count must match len(definitions) when defs exist
+                        if w['definitions']:
+                            self.assertEqual(
+                                w['sense_count'], len(w['definitions']))
+
+                    # Regression canary for the strongs-key normalization bug
+                    # (lexicon_definitions vs macula_tokens key format). If this
+                    # fails, scripts/build_lexicon_index.py normalization has
+                    # regressed and definitions silently come back empty.
+                    has_defs = any(w['definitions'] for w in bundle['kept_words'])
+                    self.assertTrue(
+                        has_defs,
+                        "no kept word has definitions — lexicon strongs key "
+                        "normalization may have regressed (see "
+                        "scripts/build_lexicon_index.py:normalize_strongs)")
+
+                    # Regression canary for the macula gloss schema (todo 3 gap
+                    # that was previously fixed). If this fails, the macula
+                    # TSV ingest has stopped populating the gloss column.
+                    has_gloss = any(w['gloss'] for w in bundle['kept_words'])
+                    self.assertTrue(
+                        has_gloss,
+                        "no kept word has a gloss — macula_tokens.gloss ingest "
+                        "may be broken (see scripts/build_macula_index.py)")
+
     def test_context_retrieval_message_recorded(self):
         """Test that context_retrieval message is recorded in database."""
         # Create test pipeline result
@@ -196,6 +245,17 @@ class TestContextRetrievalService(unittest.TestCase):
             self.assertIn('translation', bundle)
             self.assertIn('scored_words', bundle)
             self.assertIn('kept_words', bundle)
+
+            # Round-trip regression canary: serialized kept_words must carry
+            # non-empty definitions and glosses after the strongs-key
+            # normalization fix.
+            if bundle['kept_words']:
+                self.assertTrue(
+                    any(w.get('definitions') for w in bundle['kept_words']),
+                    "serialized bundle has no kept word with definitions")
+                self.assertTrue(
+                    any(w.get('gloss') for w in bundle['kept_words']),
+                    "serialized bundle has no kept word with a gloss")
 
     def test_numbered_book_parsing(self):
         """Test numbered book reference parsing."""

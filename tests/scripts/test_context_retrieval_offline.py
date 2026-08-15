@@ -295,28 +295,38 @@ class TestContextRetrievalOffline(unittest.TestCase):
                                 {
                                     "surface": "loved",
                                     "lemma": "agapaō",
-                                    "strongs": "G25",
-                                    "pos": "V-",
-                                    "pos_weight": 0.95,
-                                    "frequency_count": 100,
-                                    "sense_count": 3,
-                                    "composite_score": 0.95 * 2.39 * 1.39,
-                                }
-                            ],
-                            "kept_words": [
-                                {
-                                    "surface": "loved",
-                                    "lemma": "agapaō",
-                                    "strongs": "G25",
+                                    "strongs": "25",
                                     "morph": "V-IAI-3S",
                                     "pos": "V-",
                                     "pos_weight": 0.95,
                                     "frequency_count": 100,
                                     "sense_count": 3,
                                     "composite_score": 0.95 * 2.39 * 1.39,
-                                    "lexicon_source": "tbESG",
-                                    "definitions": ["to love"],
-                                    "glosses": ["loved"],
+                                    "definitions": [
+                                        "to love", "to be loved", "beloved"
+                                    ],
+                                    "gloss": "loved",
+                                    "lexicon_source": "tbESG+LSJ",
+                                    "macula_occurrences": 143,
+                                }
+                            ],
+                            "kept_words": [
+                                {
+                                    "surface": "loved",
+                                    "lemma": "agapaō",
+                                    "strongs": "25",
+                                    "morph": "V-IAI-3S",
+                                    "pos": "V-",
+                                    "pos_weight": 0.95,
+                                    "frequency_count": 100,
+                                    "sense_count": 3,
+                                    "composite_score": 0.95 * 2.39 * 1.39,
+                                    "lexicon_source": "tbESG+LSJ",
+                                    "definitions": [
+                                        "to love", "to be loved", "beloved"
+                                    ],
+                                    "gloss": "loved",
+                                    "macula_occurrences": 143,
                                 }
                             ],
                         }
@@ -393,7 +403,35 @@ class TestContextRetrievalOffline(unittest.TestCase):
                     self.assertIn("kept_word_count", bundle)
                     self.assertIn("scored_words", bundle)
                     self.assertIn("kept_words", bundle)
-                    
+
+                    # Assert kept_words entries carry the full contract
+                    # (non-null / non-empty where expected). Catches drift
+                    # between the mock and the real service schema.
+                    self.assertGreater(len(bundle["kept_words"]), 0)
+                    for w in bundle["kept_words"]:
+                        self.assertIsInstance(w["strongs"], str)
+                        self.assertTrue(w["strongs"])
+                        self.assertIsInstance(w["surface"], str)
+                        self.assertTrue(w["surface"])
+                        self.assertIsInstance(w["lemma"], str)
+                        self.assertTrue(w["lemma"])
+                        self.assertIsInstance(w["definitions"], list)
+                        self.assertTrue(
+                            w["definitions"],
+                            "mock kept word lacks definitions")
+                        self.assertIsInstance(w["gloss"], str)
+                        self.assertTrue(w["gloss"],
+                                        "mock kept word lacks gloss")
+                        self.assertEqual(w["lexicon_source"], "tbESG+LSJ")
+                        self.assertIsInstance(w["frequency_count"], int)
+                        self.assertGreater(w["frequency_count"], 0)
+                        self.assertIsInstance(w["sense_count"], int)
+                        self.assertEqual(w["sense_count"], len(w["definitions"]))
+                        self.assertIsInstance(w["composite_score"], (int, float))
+                        self.assertGreater(w["composite_score"], 0)
+                        self.assertIsInstance(w["macula_occurrences"], int)
+                        self.assertGreaterEqual(w["macula_occurrences"], 1)
+
                     # Assert at least one hit has kept_word_count >= 2
                     if bundle["kept_word_count"] >= 2:
                         break

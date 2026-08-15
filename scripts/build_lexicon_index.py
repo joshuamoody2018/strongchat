@@ -12,6 +12,25 @@ import requests
 from pathlib import Path
 
 
+def normalize_strongs(raw: str) -> str:
+    """Normalize an eStrong code to the bare-integer key used in macula_tokens.
+
+    STEPBible lexicons key on the 'eStrong' column (`G0976`, `H2424`, zero-padded
+    with a language prefix), while the Macula TSV `strongnumberx` column is a
+    bare integer string (`'976'`, `'2424'`). The two tables must share one key
+    format for ContextRetrievalService._fetch_senses_map to join them.
+
+    Strips a leading G/H prefix, then leading zeros, e.g. `G0976` -> `976`,
+    `H0001` -> `1`. Returns the input untouched if it does not match the
+    expected pattern (defensive; surfaces unexpected TSV drift in validation).
+    """
+    import re
+    m = re.match(r'^([GH])?0*(\d+)$', (raw or '').strip())
+    if m is None:
+        return (raw or '').strip()
+    return str(int(m.group(2)))
+
+
 def download_tsv(url, timeout):
     """Download TSV from URL and return text content."""
     try:
@@ -119,7 +138,7 @@ def process_lexicon_data(header, data_rows, lexicon_source, conn, definition_col
         if not row or len(row) < max(strongs_idx, definition_idx) + 1:
             continue
         
-        strongs_number = row[strongs_idx]
+        strongs_number = normalize_strongs(row[strongs_idx])
         definition = row[definition_idx]
         
         if not strongs_number or not definition:
@@ -175,8 +194,16 @@ def validate_ingestion(conn):
     empty_count = conn.execute(
         "SELECT COUNT(*) FROM lexicon_definitions WHERE definition = '' OR definition IS NULL"
     ).fetchone()[0]
-    
-    return tb_count, lsj_count, union_count, empty_count
+
+    # Format drift validation: no row should still carry the G/H prefix or
+    # leading-zero padding. Catches regressions in normalize_strongs early.
+    import re
+    malformed_count = 0
+    for (s,) in conn.execute("SELECT DISTINCT strongs_number FROM lexicon_definitions"):
+        if not re.match(r'^\d+$', s or ''):
+            malformed_count += 1
+
+    return tb_count, lsj_count, union_count, empty_count, malformed_count
 
 
 def main():
@@ -207,7 +234,13 @@ def main():
         CREATE INDEX IF NOT EXISTS idx_lex_strongs_source 
         ON lexicon_definitions(strongs_number, lexicon_source)
     """)
-    
+
+    # Wipe before re-ingest: INSERT OR REPLACE only dedupes by PK, so without
+    # this a re-run after a normalization change would leave stale rows behind
+    # (e.g. old 'G0976' rows alongside new '976' rows). The lexicon TSVs are
+    # the canonical source of truth and are fully re-ingested every run.
+    conn.execute("DELETE FROM lexicon_definitions")
+
     # Process TBESG
     print("Processing TBESG...")
     if args.tbESG_path:
@@ -264,7 +297,7 @@ def main():
         print("Warning: LSJ download failed, continuing with TBESG only", file=sys.stderr)
     
     # Validate and print summary
-    tb_count, lsj_count, union_count, empty_count = validate_ingestion(conn)
+    tb_count, lsj_count, union_count, empty_count, malformed_count = validate_ingestion(conn)
     
     print(f"\nTBESG: {tb_count} senses across {conn.execute('SELECT COUNT(DISTINCT strongs_number) FROM lexicon_definitions WHERE lexicon_source=\'tbESG\'').fetchone()[0]} Strong's numbers")
     print(f"LSJ: {lsj_count} senses across {conn.execute('SELECT COUNT(DISTINCT strongs_number) FROM lexicon_definitions WHERE lexicon_source=\'lsj\'').fetchone()[0]} Strong's numbers")
@@ -273,6 +306,21 @@ def main():
     # Check for empty definitions
     if empty_count > 0:
         print(f"Warning: Found {empty_count} empty definitions", file=sys.stderr)
+    
+    # Fail loudly if normalization regressed
+    if malformed_count > 0:
+        import sqlite3 as _sqlite3
+        samples = conn.execute(
+            "SELECT DISTINCT strongs_number FROM lexicon_definitions "
+            f"WHERE NOT GLOB('[0-9]*')"
+        ).fetchall()[:10]
+        print(
+            f"ERROR: {malformed_count} distinct strongs_number rows are not "
+            f"bare-integer format after normalization. Examples: "
+            f"{[r[0] for r in samples]}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     
     conn.close()
 

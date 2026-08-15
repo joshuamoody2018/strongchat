@@ -80,14 +80,16 @@ def _get_context_retrieval_messages(db: ChatDatabase, session_uuid: str) -> list
 
 def _validate_context_bundles(result) -> None:
     """Validate that every hit has a properly structured context_bundle."""
+    saw_definitions = False  # regression canary for strongs-key normalization
+    saw_gloss = False         # regression canary for macula gloss schema
     for item in result.results:
         hits = item.get('hits', [])
         for hit in hits:
             # (a) every hit has a context_bundle key
             assert 'context_bundle' in hit, "hit missing context_bundle key"
-            
+
             bundle = hit['context_bundle']
-            
+
             # Only validate kept_word_count for successful retrievals
             build_summary = bundle.get('build_summary', '')
             if build_summary not in ['unparseable reference'] and not build_summary.startswith('no macula tokens for'):
@@ -96,27 +98,77 @@ def _validate_context_bundles(result) -> None:
                 assert kept_word_count >= MIN_WORDS_AFTER_TRIM, (
                     f"kept_word_count {kept_word_count} < {MIN_WORDS_AFTER_TRIM} for successful retrieval"
                 )
-                
+
                 # (c) kept_words is a strict subset of the unique-word count from scored_words
                 kept_words = bundle.get('kept_words', [])
                 scored_words = bundle.get('scored_words', [])
                 unique_word_count = bundle.get('unique_word_count', 0)
-                
+
                 assert len(kept_words) <= len(scored_words), (
                     f"kept_words count {len(kept_words)} > scored_words count {len(scored_words)}"
                 )
                 assert len(kept_words) <= unique_word_count, (
                     f"kept_words count {len(kept_words)} > unique_word_count {unique_word_count}"
                 )
-                
+
                 # (d) at least one scored_words entry has pos in ('V-', 'N-')
                 has_content_word = any(
-                    word.get('pos', '') in ('V-', 'N-') 
+                    word.get('pos', '') in ('V-', 'N-')
                     for word in scored_words
                 )
                 assert has_content_word, (
                     "no scored_words entry with pos in ('V-', 'N-')"
                 )
+
+                # (e) every kept_word has the full contract: non-empty
+                # strongs/surface/lemma, correct types for numeric and list
+                # fields, lexicon_source tag, composite_score > 0. Catches
+                # drift between live output and the synthesis-ready schema.
+                for w in kept_words:
+                    assert isinstance(w.get('strongs'), str) and w['strongs'], (
+                        f"kept word strongs must be a non-empty str: {w.get('strongs')!r}")
+                    assert isinstance(w.get('surface'), str) and w['surface'], (
+                        f"kept word surface must be a non-empty str: {w.get('surface')!r}")
+                    assert isinstance(w.get('lemma'), str) and w['lemma'], (
+                        f"kept word lemma must be a non-empty str: {w.get('lemma')!r}")
+                    assert isinstance(w.get('definitions'), list), (
+                        f"definitions must be a list: {w.get('definitions')!r}")
+                    assert isinstance(w.get('gloss'), str), (
+                        f"gloss must be a str: {w.get('gloss')!r}")
+                    assert isinstance(w.get('frequency_count'), int) and w['frequency_count'] > 0, (
+                        f"frequency_count must be a positive int: {w.get('frequency_count')!r}")
+                    assert isinstance(w.get('sense_count'), int) and w['sense_count'] >= 1, (
+                        f"sense_count must be int >= 1: {w.get('sense_count')!r}")
+                    assert isinstance(w.get('composite_score'), (int, float)) and w['composite_score'] > 0, (
+                        f"composite_score must be positive number: {w.get('composite_score')!r}")
+                    assert w.get('lexicon_source') == 'tbESG+LSJ', (
+                        f"lexicon_source must be 'tbESG+LSJ': {w.get('lexicon_source')!r}")
+                    assert isinstance(w.get('macula_occurrences'), int) and w['macula_occurrences'] >= 1, (
+                        f"macula_occurrences must be int >= 1: {w.get('macula_occurrences')!r}")
+                    # sense_count must match len(definitions) when defs exist
+                    if w['definitions']:
+                        assert w['sense_count'] == len(w['definitions']), (
+                            f"sense_count {w['sense_count']} != len(definitions) "
+                            f"{len(w['definitions'])} for strongs {w['strongs']}")
+
+                    if w['definitions']:
+                        saw_definitions = True
+                    if w['gloss']:
+                        saw_gloss = True
+
+    # (f) regression canaries: at least one kept word across the entire
+    # result must carry non-empty definitions and a non-empty gloss. If
+    # either fires, a downstream ingest script (build_lexicon_index.py or
+    # build_macula_index.py) has regressed and the context bundle is no
+    # longer synthesis-ready.
+    assert saw_definitions, (
+        "no kept word across any hit has definitions — lexicon strongs key "
+        "normalization may have regressed (see scripts/build_lexicon_index.py:normalize_strongs)"
+    )
+    assert saw_gloss, (
+        "no kept word across any hit has a gloss — macula_tokens.gloss ingest "
+        "may be broken (see scripts/build_macula_index.py)"
+    )
 
 
 def _validate_context_retrieval_messages(db: ChatDatabase, session_uuid: str, num_intents: int, result) -> None:
@@ -159,7 +211,9 @@ def _print_top_kept_words(result) -> None:
                     f"      {word.get('strongs', 'no-strongs')}: "
                     f"{word.get('surface', 'no-surface')} "
                     f"({word.get('pos', 'no-pos')}, "
-                    f"score: {word.get('composite_score', 0):.3f})"
+                    f"score: {word.get('composite_score', 0):.3f}, "
+                    f"defs: {word.get('definitions', [])}, "
+                    f"gloss: {word.get('gloss', '')!r})"
                 )
         else:
             print("    No kept words found")
