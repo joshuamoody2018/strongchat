@@ -28,8 +28,7 @@ src/              Source code and service implementations
 scripts/          Setup, utility, and pipeline scripts
   setup_environment.sh    Bootstrap Python environment and dependencies
   ingest_corpus.py        Ingest Bible corpus into ChromaDB
-  create_new_database.py  Create the SQLite schema (seeding via migrate_pipeline_message_types.py)
-  migrate_pipeline_message_types.py  Seed/update ref_message_types rows
+  create_new_database.py  Create the SQLite schema and seed ref_message_types
 tests/            Test suites
   system/         System/integration tests
   scripts/        Script-level tests
@@ -76,7 +75,6 @@ Run the script-style tests directly:
 For example:
 
 ```bash
-.venv/bin/python tests/scripts/test_database_queries.py
 .venv/bin/python tests/scripts/test_intent_service.py
 .venv/bin/python tests/scripts/test_pipeline_offline.py
 ```
@@ -99,8 +97,6 @@ For example:
 Top-level tests in `tests/` are runnable with `unittest`:
 
 ```bash
-.venv/bin/python -m unittest tests.test_database_setup
-.venv/bin/python -m unittest tests.test_message_workflow
 .venv/bin/python -m unittest tests.test_integration
 ```
 

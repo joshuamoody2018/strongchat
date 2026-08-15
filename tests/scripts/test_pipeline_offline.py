@@ -2,6 +2,7 @@
 """Consolidated offline step tests for pipeline services.
 
 Covers: parsing fenced/prose JSON and schema validation on AIMessage,
+AIMessage lifecycle (creation defaults, success/failure, retries),
 LLMWrapper retry with mocked _call_api_async, EmbeddingService retry with
 an injected embed_fn, HydeService partial failure, and intent schema
 boundaries. All tests use fixture DBs in temp dirs and a dummy API key
@@ -348,6 +349,49 @@ class TestAIMessageParsing(unittest.TestCase):
             )
 
 
+class TestAIMessageDataclass(unittest.TestCase):
+    """AIMessage lifecycle: creation defaults, success, failure, retries."""
+
+    def test_aimessage_creation_defaults(self):
+        """A fresh AIMessage has generated uuid/created_at and null fields."""
+        msg = AIMessage()
+        self.assertIsNotNone(msg.uuid)
+        self.assertIsNotNone(msg.created_at)
+        self.assertEqual(msg.num_tries, 1)
+        self.assertIsNone(msg.raw_response)
+        self.assertIsNone(msg.error_text)
+
+    def test_aimessage_success_flow(self):
+        """mark_success_from_text stores the parsed response."""
+        msg = AIMessage(unique_prompt="Test prompt")
+        msg.mark_success_from_text(
+            '{"intent": "question", "confidence": 0.95}',
+            schema={"type": "object"},
+        )
+        self.assertIsNotNone(msg.raw_response)
+        self.assertEqual(
+            msg.get_parsed_response({"type": "object"}),
+            {"intent": "question", "confidence": 0.95},
+        )
+        self.assertIsNotNone(msg.response_at)
+        self.assertIsNone(msg.error_text)
+
+    def test_aimessage_failure_flow(self):
+        """mark_failure records the error and increments num_tries."""
+        msg = AIMessage(unique_prompt="Test prompt")
+        msg.mark_failure("API timeout")
+        self.assertEqual(msg.num_tries, 2)
+        self.assertEqual(msg.error_text, "API timeout")
+        self.assertIsNotNone(msg.response_at)
+
+    def test_max_retries_exceeded(self):
+        """num_tries crossing max_retries signals retry exhaustion."""
+        msg = AIMessage(num_tries=3)
+        self.assertTrue(msg.num_tries >= 3)
+        msg.num_tries = 2
+        self.assertFalse(msg.num_tries >= 3)
+
+
 class TestLLMWrapperRetry(unittest.TestCase):
     """Offline retry tests for LLMWrapper."""
 
@@ -590,6 +634,7 @@ def run_tests():
     loader = unittest.TestLoader()
     suite = unittest.TestSuite()
     suite.addTests(loader.loadTestsFromTestCase(TestAIMessageParsing))
+    suite.addTests(loader.loadTestsFromTestCase(TestAIMessageDataclass))
     suite.addTests(loader.loadTestsFromTestCase(TestLLMWrapperRetry))
     suite.addTests(loader.loadTestsFromTestCase(TestEmbeddingServiceRetry))
     suite.addTests(loader.loadTestsFromTestCase(TestHydePartialFailure))

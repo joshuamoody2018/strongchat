@@ -85,13 +85,10 @@ mkdir -p data
 log "Ensuring SQLite database exists at $DB_PATH..."
 if [ ! -f "$DB_PATH" ]; then
     "$PYTHON" scripts/create_new_database.py --db-path "$DB_PATH"
-    log "Database created."
+    log "Database created and seeded."
 else
-    log "Database already exists; skipping schema creation."
+    log "Database already exists; skipping schema creation and seeding."
 fi
-
-log "Seeding message types..."
-"$PYTHON" scripts/migrate_pipeline_message_types.py --db-path "$DB_PATH"
 
 log "Downloading Macula Greek corpus (Clear-Bible/macula-greek, CC BY 4.0)..."
 if [ ! -f data/macula/macula-greek.tsv ]; then

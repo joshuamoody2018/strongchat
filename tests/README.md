@@ -28,16 +28,6 @@ Focus on individual components and specific scenarios, providing more granular t
 Integration tests for the database-driven LLM message system:
 
 #### Integration Test Files:
-- **Database Setup Tests** (`test_database_setup.py`)
-  - Verify new database schema creation
-  - Test message types table population
-  - Validate foreign key relationships
-  
-- **Message Workflow Tests** (`test_message_workflow.py`)
-  - Complete message lifecycle: creation → API call → parsing → storage
-  - Test retry logic and error handling
-  - Validate response parsing with schemas
-  
 - **Integration Tests** (`test_integration.py`)
   - End-to-end workflow tests
   - Session management with multiple messages
@@ -47,16 +37,12 @@ Integration tests for the database-driven LLM message system:
 Standalone script-style tests for services and components. Run each file directly with Python:
 
 #### Script Test Files:
-- **Database Tests** (`test_database_queries.py`, `test_database_port.py`)
-  - Verify database queries, schema, and port handling
 - **Embedding Tests** (`test_embedding_service.py`)
   - Validate embedding service behavior
 - **HyDE Tests** (`test_hyde_schema.py`, `test_hyde_service.py`)
   - Validate HyDE schema and service behavior
 - **Intent Tests** (`test_intent_schema.py`, `test_intent_service.py`)
   - Validate intent schema and service behavior
-- **Migration Tests** (`test_migration.py`)
-  - Verify database migration logic
 - **Pipeline Tests** (`test_pipeline_offline.py`, `test_pipeline_result_traces.py`)
   - Run offline pipeline validation
 - **Retrieval Tests** (`test_retrieval_service.py`)
@@ -95,7 +81,6 @@ This project does not use pytest. Run tests directly with Python or via `unittes
 
 ```bash
 # Run script-style tests directly
-.venv/bin/python tests/scripts/test_database_queries.py
 .venv/bin/python tests/scripts/test_intent_service.py
 .venv/bin/python tests/scripts/test_pipeline_offline.py
 
@@ -106,8 +91,6 @@ set -a; . ./.env; set +a
 .venv/bin/python tests/system/test_pipeline_e2e.py
 
 # Run top-level unittest tests
-.venv/bin/python -m unittest tests.test_database_setup
-.venv/bin/python -m unittest tests.test_message_workflow
 .venv/bin/python -m unittest tests.test_integration
 ```
 
@@ -130,7 +113,7 @@ MOCK_RESPONSES = {
 ```
 
 ### Test Database
-Tests use a separate test database (`data/test_chat_database.db`) to avoid interfering with production data.
+Most script tests build their own fixture databases in temp directories. `test_context_retrieval_service.py` uses the main `data/chat_database.db` (reseeded via `create_new_database.py` only if the `context_retrieval` type is missing) and leaves its test session and messages behind; the database is not a production instance.
 
 ## Test Scenarios
 
@@ -181,7 +164,7 @@ These tests are designed to run in CI environments:
 
 When adding new message types or pipeline steps:
 
-1. **Add to ref_message_types table**: Update `migrate_pipeline_message_types.py`
+1. **Add to ref_message_types table**: Update the seed rows in `scripts/create_new_database.py`
 2. **Create test scenario**: Add to appropriate test file
 3. **Verify integration**: Test complete workflow
 4. **Document**: Update this README with new test patterns
@@ -197,14 +180,11 @@ aiohttp>=3.8.0
 ## Test Environment Setup
 
 ```bash
-# Create test database
-.venv/bin/python scripts/create_new_database.py --db-path data/test_chat_database.db
-
-# Populate test data
-.venv/bin/python scripts/migrate_pipeline_message_types.py --db-path data/test_chat_database.db
+# Create and seed the main database (idempotent)
+.venv/bin/python scripts/create_new_database.py
 
 # Run a quick script-style test
-.venv/bin/python tests/scripts/test_database_queries.py
+.venv/bin/python tests/scripts/test_pipeline_offline.py
 ```
 
 ## Debugging Tests

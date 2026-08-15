@@ -160,7 +160,7 @@ data/
 
 scripts/
 ├── ingest_corpus.py         # Bible corpus ingest into ChromaDB
-└── create_new_database.py   # Database schema (idempotent; seeding via migrate_pipeline_message_types.py)
+└── create_new_database.py   # Database schema creation + ref_message_types seeding
 
 architecture/
 ├── high-level.md            # This document

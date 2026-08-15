@@ -210,10 +210,10 @@ Live system tests (require `OPENROUTER_API_KEY` and an ingested corpus):
 .venv/bin/python tests/system/test_pipeline_e2e.py
 ```
 
-### Run the database migration
+### Create and seed the database
 
 ```bash
-.venv/bin/python scripts/migrate_pipeline_message_types.py
+.venv/bin/python scripts/create_new_database.py
 ```
 
 ## Cost Notes
