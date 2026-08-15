@@ -25,16 +25,20 @@ class ContextRetrievalService(BaseService):
         macula_db_path: str = 'data/macula_index.db',
     ) -> None:
         super().__init__(db_path)
-        # macula DB is a SEPARATE connection with check_same_thread=False
-        # so asyncio.to_thread calls don't raise sqlite3.ProgrammingError.
-        # Pattern mirrors _ThreadSafeChatDatabase at src/services/database/adapters/sqlite.py:25-26.
-        self._macula_conn = sqlite3.connect(macula_db_path, check_same_thread=False)
-        # Single lock to serialize writes; reads can be concurrent under WAL
-        # but the lock keeps things simple for v1.
-        self._macula_lock = asyncio.Lock()
+        # SQLite connections are not safe for concurrent use across threads;
+        # check_same_thread=False only suppresses the thread-affinity check,
+        # it does not serialize access. We need to call _fetch_* helpers via
+        # asyncio.to_thread from parallel intent coroutines, so we use the
+        # per-call short-lived connection pattern: each helper opens a fresh
+        # sqlite3.connect(), runs one query, and closes it. SQLite opens in
+        # <1ms on local disk and the OS-level file lock handles serialization.
+        # See docs/implementation-status.md and todo.md for the rationale.
+        self._macula_db_path = macula_db_path
 
     def close(self) -> None:
-        self._macula_conn.close()
+        # No long-lived macula connection to close; per-call connections are
+        # closed at the end of every _fetch_* helper.
+        pass
 
     # ----- public API -----
 
@@ -208,26 +212,34 @@ class ContextRetrievalService(BaseService):
     def _fetch_tokens(
         self, book_osis: str, chapter: int, verse: int,
     ) -> List[Dict[str, Any]]:
-        cur = self._macula_conn.execute(
-            "SELECT surface, lemma, strongs, morph, pos, gloss FROM macula_tokens "
-            "WHERE book_osis=? AND chapter=? AND verse=? ORDER BY word_pos",
-            (book_osis, chapter, verse),
-        )
-        return [
-            {'surface': r[0], 'lemma': r[1], 'strongs': r[2], 'morph': r[3], 'pos': r[4], 'gloss': r[5]}
-            for r in cur.fetchall()
-        ]
+        conn = sqlite3.connect(self._macula_db_path)
+        try:
+            cur = conn.execute(
+                "SELECT surface, lemma, strongs, morph, pos, gloss FROM macula_tokens "
+                "WHERE book_osis=? AND chapter=? AND verse=? ORDER BY word_pos",
+                (book_osis, chapter, verse),
+            )
+            return [
+                {'surface': r[0], 'lemma': r[1], 'strongs': r[2], 'morph': r[3], 'pos': r[4], 'gloss': r[5]}
+                for r in cur.fetchall()
+            ]
+        finally:
+            conn.close()
 
     def _fetch_freq_map(self, strongs_numbers: List[str]) -> Dict[str, int]:
         if not strongs_numbers:
             return {}
         placeholders = ','.join('?' * len(strongs_numbers))
-        cur = self._macula_conn.execute(
-            f"SELECT strongs_number, occurrence_count FROM strongs_frequency "
-            f"WHERE strongs_number IN ({placeholders})",
-            strongs_numbers,
-        )
-        return {r[0]: r[1] for r in cur.fetchall()}
+        conn = sqlite3.connect(self._macula_db_path)
+        try:
+            cur = conn.execute(
+                f"SELECT strongs_number, occurrence_count FROM strongs_frequency "
+                f"WHERE strongs_number IN ({placeholders})",
+                strongs_numbers,
+            )
+            return {r[0]: r[1] for r in cur.fetchall()}
+        finally:
+            conn.close()
 
     def _fetch_senses_map(
         self, strongs_numbers: List[str],
@@ -235,26 +247,34 @@ class ContextRetrievalService(BaseService):
         if not strongs_numbers:
             return {}
         placeholders = ','.join('?' * len(strongs_numbers))
-        cur = self._macula_conn.execute(
-            f"SELECT strongs_number, definition FROM lexicon_definitions "
-            f"WHERE strongs_number IN ({placeholders}) ORDER BY strongs_number, sense_index",
-            strongs_numbers,
-        )
-        out: Dict[str, List[str]] = {}
-        for r in cur.fetchall():
-            out.setdefault(r[0], []).append(r[1])
-        return out
+        conn = sqlite3.connect(self._macula_db_path)
+        try:
+            cur = conn.execute(
+                f"SELECT strongs_number, definition FROM lexicon_definitions "
+                f"WHERE strongs_number IN ({placeholders}) ORDER BY strongs_number, sense_index",
+                strongs_numbers,
+            )
+            out: Dict[str, List[str]] = {}
+            for r in cur.fetchall():
+                out.setdefault(r[0], []).append(r[1])
+            return out
+        finally:
+            conn.close()
 
     def _build_occurrence_cache(self, strongs_numbers: List[str]) -> Dict[str, int]:
         if not strongs_numbers:
             return {}
         placeholders = ','.join('?' * len(strongs_numbers))
-        cur = self._macula_conn.execute(
-            f"SELECT strongs, COUNT(*) FROM macula_tokens "
-            f"WHERE strongs IN ({placeholders}) GROUP BY strongs",
-            strongs_numbers,
-        )
-        return {r[0]: r[1] for r in cur.fetchall()}
+        conn = sqlite3.connect(self._macula_db_path)
+        try:
+            cur = conn.execute(
+                f"SELECT strongs, COUNT(*) FROM macula_tokens "
+                f"WHERE strongs IN ({placeholders}) GROUP BY strongs",
+                strongs_numbers,
+            )
+            return {r[0]: r[1] for r in cur.fetchall()}
+        finally:
+            conn.close()
 
 
 # ----- module-level helpers -----

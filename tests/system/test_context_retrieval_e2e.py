@@ -74,14 +74,34 @@ def _check_skip_conditions() -> tuple[bool, str]:
 
 
 def _get_context_retrieval_messages(db: ChatDatabase, session_uuid: str) -> list[dict]:
-    """Return all context_retrieval messages for a session."""
-    return db.get_messages_by_session_and_type(session_uuid, 'context_retrieval')
+    """Return all context_retrieval messages for a session.
+
+    Queries the chat DB directly rather than going through ChatDatabase,
+    which does not expose a sync get_messages_by_session_and_type accessor
+    (the async port does, but the e2e test runs synchronously after the
+    pipeline completes). Mirrors the pattern in
+    tests/scripts/test_context_retrieval_service.py.
+    """
+    db_path = db.db_path if hasattr(db, 'db_path') else 'data/chat_database.db'
+    conn = sqlite3.connect(db_path)
+    try:
+        cursor = conn.execute(
+            'SELECT uuid, session_uuid, message_type_slug, unique_prompt, '
+            'raw_response, created_at, response_at, num_tries, error_text '
+            'FROM messages WHERE session_uuid = ? AND message_type_slug = ?',
+            (session_uuid, 'context_retrieval'),
+        )
+        cols = [d[0] for d in cursor.description]
+        return [dict(zip(cols, row)) for row in cursor.fetchall()]
+    finally:
+        conn.close()
 
 
 def _validate_context_bundles(result) -> None:
     """Validate that every hit has a properly structured context_bundle."""
     saw_definitions = False  # regression canary for strongs-key normalization
     saw_gloss = False         # regression canary for macula gloss schema
+    saw_nonempty_bundle = False  # gating flag: only fire canaries if >= 1 bundle had kept words
     for item in result.results:
         hits = item.get('hits', [])
         for hit in hits:
@@ -120,6 +140,8 @@ def _validate_context_bundles(result) -> None:
                     "no scored_words entry with pos in ('V-', 'N-')"
                 )
 
+                saw_nonempty_bundle = True
+
                 # (e) every kept_word has the full contract: non-empty
                 # strongs/surface/lemma, correct types for numeric and list
                 # fields, lexicon_source tag, composite_score > 0. Catches
@@ -156,18 +178,26 @@ def _validate_context_bundles(result) -> None:
                     if w['gloss']:
                         saw_gloss = True
 
-    # (f) regression canaries: at least one kept word across the entire
-    # result must carry non-empty definitions and a non-empty gloss. If
-    # either fires, a downstream ingest script (build_lexicon_index.py or
-    # build_macula_index.py) has regressed and the context bundle is no
-    # longer synthesis-ready.
+    # (f) regression canaries: gated on saw_nonempty_bundle so a result set
+    # of purely-OT verses (which legitimately have no Macula tokens and thus
+    # no definitions) does not false-fire. If at least one non-empty bundle
+    # was produced, at least one of its kept words must carry non-empty
+    # definitions and a non-empty gloss. If either fires, a downstream ingest
+    # script (build_lexicon_index.py or build_macula_index.py) has regressed
+    # and the context bundle is no longer synthesis-ready.
+    assert saw_nonempty_bundle, (
+        "no non-empty context_bundle was produced for any hit — either every "
+        "retrieved verse was OT (no Macula tokens), or context retrieval is "
+        "silently producing all-empty bundles"
+    )
     assert saw_definitions, (
-        "no kept word across any hit has definitions — lexicon strongs key "
-        "normalization may have regressed (see scripts/build_lexicon_index.py:normalize_strongs)"
+        "no kept word across any non-empty bundle has definitions — lexicon "
+        "strongs key normalization may have regressed (see "
+        "scripts/build_lexicon_index.py:normalize_strongs)"
     )
     assert saw_gloss, (
-        "no kept word across any hit has a gloss — macula_tokens.gloss ingest "
-        "may be broken (see scripts/build_macula_index.py)"
+        "no kept word across any non-empty bundle has a gloss — macula_tokens."
+        "gloss ingest may be broken (see scripts/build_macula_index.py)"
     )
 
 
