@@ -14,7 +14,7 @@ StrongChat is a biblical search system using LLMs with two-level RRF (Reciprocal
 4. ✅ **Parallel Retrieval** — Embed each HyDE doc, search against English translations, top-K per doc
 5. **RRF Level 1** — Merge/rerank M result sets within each intent → one ranked list per intent
 6. **RRF Level 2** — Merge/rerank N per-intent lists → single candidate verse set
-7. ✅ **Macula Lookup** — Pull lemma/Strong's data for candidate set (NT: Macula Greek, OT: TBD)
+7. ✅ **Macula Lookup** — Pull lemma/Strong's data for candidate set (NT: Macula Greek, OT: Macula Hebrew WLC)
 8. **Graph Expansion** — Lemma-based/verse-graph traversal for cross-references
 9. ✅ **Re-rank/Organize** — Consolidate steps 6-8 into structured retrieval set
 10. **Synthesis** — Frontier model answers using retrieval + original prompt, citations linked
@@ -123,9 +123,12 @@ StrongChat is a biblical search system using LLMs with two-level RRF (Reciprocal
 
 #### Macula Integration
 - **Purpose**: Original language data lookup (step 7)
-- **Location**: TBD
-- **Status**: NT via Macula Greek, OT TBD
-- **Requirements**: Strong's concordance integration
+- **Greek**: `scripts/download_macula_greek.py` → `scripts/build_macula_index.py --testament greek` (Macula Greek SBLGNT, CC BY 4.0)
+- **Hebrew**: `scripts/download_macula_hebrew.py` → `scripts/build_macula_index.py --testament hebrew` (Macula Hebrew WLC, CC BY 4.0)
+- **Lexicons**: `scripts/build_lexicon_index.py --testament both` ingests Greek TBESG+LSJ and Hebrew TBESH (all STEPBible CC BY 4.0)
+- **Frequencies**: `scripts/build_strongs_frequency.py --testament {greek,hebrew}` writes `strongs_frequency` rows partitioned by `testament='NT'` or `'OT'`
+- **Status**: Both testaments implemented and tested end-to-end (offline integration tests under `tests/scripts/test_hebrew_ingest_integration.py` and `tests/scripts/test_context_retrieval_hebrew.py`; live NT context-retrieval regression under `tests/system/test_context_retrieval_e2e.py`)
+- **Runtime routing**: `ContextRetrievalService._build_bundle_for_hit` derives `language` from the first token's `book_num` (< 40 Hebrew, >= 40 Greek) and routes all downstream lookups (POS weights, frequency filter, lexicon source filter, occurrence cache) accordingly. See `docs/pipeline-context-retrieval.md` for the routing table.
 
 #### Synthesis, Evaluator, Validator, and Final Response
 - **Purpose**: Generate and verify the final answer (steps 10-13)

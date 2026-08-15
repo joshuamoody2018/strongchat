@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Idempotent local development environment bootstrap for StrongChat.
 # Installs system dependencies, creates a Python .venv, installs requirements,
-# creates the chat DB, downloads and ingests the Macula Greek corpus + STEPBible TBESG/LSJ lexicons,
-# and runs pipeline message-type migrations.
+# creates the chat DB, downloads and ingests the Macula Greek + Hebrew
+# corpora + STEPBible TBESG/LSJ/TBESH lexicons, and runs pipeline
+# message-type migrations.
 
 set -euo pipefail
 
@@ -98,14 +99,22 @@ else
     log "Macula Greek corpus already present at data/macula/macula-greek.tsv; skipping download."
 fi
 
-log "Building Macula Greek SQLite index..."
-if ! .venv/bin/python -c "import sqlite3; c = sqlite3.connect('data/macula_index.db'); n = c.execute('SELECT COUNT(*) FROM macula_tokens').fetchone()[0]; import sys; sys.exit(0 if n > 0 else 1)" 2>/dev/null; then
-    log "Building Macula Greek SQLite index..."
-    .venv/bin/python scripts/build_macula_index.py
-    .venv/bin/python scripts/build_strongs_frequency.py
-    .venv/bin/python scripts/build_lexicon_index.py
+log "Downloading Macula Hebrew corpus (Clear-Bible/macula-hebrew, CC BY 4.0)..."
+if [ ! -f data/macula/macula-hebrew.tsv ]; then
+    .venv/bin/python scripts/download_macula_hebrew.py
 else
-    log "Macula index already populated; skipping build."
+    log "Macula Hebrew corpus already present at data/macula/macula-hebrew.tsv; skipping download."
+fi
+
+log "Building Macula SQLite index (Greek + Hebrew)..."
+if ! .venv/bin/python -c "import sqlite3, sys; c = sqlite3.connect('data/macula_index.db'); sys.exit(0 if c.execute('SELECT COUNT(*) FROM macula_tokens WHERE book_num < 40').fetchone()[0] > 0 and c.execute('SELECT COUNT(*) FROM macula_tokens WHERE book_num >= 40').fetchone()[0] > 0 else 1)" 2>/dev/null; then
+    .venv/bin/python scripts/build_macula_index.py --testament greek
+    .venv/bin/python scripts/build_macula_index.py --testament hebrew
+    .venv/bin/python scripts/build_strongs_frequency.py --testament greek
+    .venv/bin/python scripts/build_strongs_frequency.py --testament hebrew
+    .venv/bin/python scripts/build_lexicon_index.py --testament both
+else
+    log "Macula index already populated with both testaments; skipping build."
 fi
 
 log "Downloading Bible corpus (KJV + WEB)..."
@@ -123,5 +132,5 @@ else
 fi
 
 log "Environment setup complete."
-log "Macula + Bible data ingested, ChromaDB populated. To re-run: delete data/macula_index.db, data/macula/macula-greek.tsv, data/bible/*.json, or data/chroma/ and re-run this script."
+log "Macula Hebrew + Greek data ingested, ChromaDB populated. To re-run: delete data/macula_index.db, data/macula/*.tsv, data/bible/*.json, or data/chroma/ and re-run this script."
 log "Activate the virtual environment with: source $VENV_DIR/bin/activate"

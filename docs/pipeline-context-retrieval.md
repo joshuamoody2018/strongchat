@@ -2,10 +2,10 @@
 
 ## Overview
 
-The context retrieval stage of the StrongChat pipeline takes the ranked verse candidates from the HyDE-retrieval step and enriches them with original-language data from Macula Greek. It covers pipeline steps 7 and 9:
+The context retrieval stage of the StrongChat pipeline takes the ranked verse candidates from the HyDE-retrieval step and enriches them with original-language data from Macula Greek (NT) and Macula Hebrew WLC (OT). It covers pipeline steps 7 and 9:
 
-1. **Macula Lookup** — Pull lemma, Strong's number, and morphological data for each verse candidate.
-2. **Re-rank/Organize** — Filter by part-of-speech, score by frequency and ambiguity, and trim to the most significant words.
+1. **Macula Lookup** — Pull lemma, Strong's number, and morphological data for each verse candidate. The service routes per hit by `book_num < 40` (Hebrew OT) vs `book_num >= 40` (Greek NT) because Greek and Hebrew Strong's bare-int ranges overlap.
+2. **Re-rank/Organize** — Filter by part-of-speech (Robinson codes for Greek, HAM codes for Hebrew), score by frequency and ambiguity, and trim to the most significant words.
 
 The implemented service is located under `src/services/context/` and is composed by `PipelineRunner` (`src/services/pipeline/runner.py`). This document describes the message types, service contracts, data flow, and scoring methodology.
 
@@ -108,28 +108,60 @@ composite_score = 0.825 * log1p(1/9) * log1p(1)
 - **URL**: https://raw.githubusercontent.com/Clear-Bible/macula-greek/main/tsv/macula-greek.tsv
 - **License**: CC BY 4.0
 - **Content**: NT Greek tokens with lemma, Strong's number, morphological tags, and gloss
+- **Ingest**: `scripts/download_macula_greek.py` → `data/macula/macula-greek.tsv`; `scripts/build_macula_index.py --testament greek`
+
+### Macula Hebrew Tokens (WLC)
+- **Source**: `Clear-Bible/macula-hebrew` WLC (Westminster Leningrad Codex)
+- **URL**: https://github.com/Clear-Bible/macula-hebrew/blob/main/WLC/tsv/macula-hebrew.tsv (served via Git LFS; the download script resolves the LFS pointer itself via the GitHub LFS batch API)
+- **License**: CC BY 4.0 (WLC text public domain from the Groves Center; morphology from Open Scriptures Hebrew Bible; syntax trees from Groves Center under CC BY 4.0; Cherith Glosses CC BY 4.0; MARBLE/SDBH sense data)
+- **Content**: OT Hebrew tokens with lemma, Strong's number (bare zero-padded int, optionally suffixed with a sense letter like `0430a`), morphological tags (HAM lowercase codes), and gloss. xml:id format: `o` + 2-digit book (1..39) + 3-digit chapter + 3-digit verse + 4-digit word_slot (13 chars total).
+- **Ingest**: `scripts/download_macula_hebrew.py` → `data/macula/macula-hebrew.tsv`; `scripts/build_macula_index.py --testament hebrew`
 
 ### TBESG (Tyndale Brief Extended Greek)
 - **Source**: `STEPBible/STEPBible-Data` Lexicons/TBESG
 - **URL**: https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/Lexicons/TBESG%20-%20Tyndale%20Brief%20Greek%20Lexicon%20of%20Extended%20Strong%E2%80%99s%20for%20Greek.tsv
 - **License**: CC BY 4.0
-- **Content**: NT Greek lexicon with Strong's-keyed definitions
+- **Content**: NT Greek lexicon with Strong's-keyed definitions. Stored in `lexicon_definitions` under `lexicon_source='tbESG'`.
+
+### TBESH (Tyndale Brief Extended Hebrew)
+- **Source**: `STEPBible/STEPBible-Data` Lexicons/TBESH
+- **URL**: https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/Lexicons/TBESH%20-%20Translators%20Brief%20lexicon%20of%20Extended%20Strongs%20for%20Hebrew%20-%20STEPBible.org%20CC%20BY.txt
+- **License**: CC BY 4.0
+- **Content**: OT Hebrew lexicon with Strong's-keyed definitions, one row per `dStrong#` sense (the Greek TBESG has one row per lemma with multi-sense splits inside the definition; this difference is handled by `build_lexicon_index.process_lexicon_data`, which assigns sequential `sense_index` per strongs number across both single-row-multi-sense and multi-row single-sense patterns). Stored in `lexicon_definitions` under `lexicon_source='tbESH'`.
 
 ### LSJ (Liddell-Scott Jones Greek Lexicon)
 - **Source**: `STEPBible/STEPBible-Data` Lexicons/TFLSJ
-- **URL**: https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/Lexicons/Thayers%20Greek%20Lexicon.tsv
+- **URL**: https://raw.githubusercontent.com/STEPBible/STEPBible-Data/master/Lexicons/TFLSJ%20%200-5624%20-%20Translators%20Formatted%20full%20LSJ%20Bible%20lexicon%20-%20STEPBible.org%20CC%20BY.txt
 - **License**: CC BY 4.0
-- **Note**: Used as fallback when TBESG doesn't have coverage (Thayer's is public domain but LSJ has better coverage)
+- **Note**: Used as fallback when TBESG doesn't have coverage (Thayer's is public domain but LSJ has better coverage). Stored under `lexicon_source='lsj'`.
+
+## Cross-Testament Routing
+
+The service derives `language` ('greek' or 'hebrew') from the first token's `book_num` (OT < 40 ≤ NT), then routes all downstream lookups:
+
+| Lookup | Greek branch | Hebrew branch |
+|--------|--------------|----------------|
+| POS weight table | `POS_WEIGHTS` (Robinson 'V-', 'N-', ...) | `POS_WEIGHTS_HEBREW` (HAM 'verb', 'subs', ...) |
+| Frequency filter | `strongs_frequency.testament='NT'` | `strongs_frequency.testament='OT'` |
+| Lexicon source filter | `tbESG` + `lsj` | `tbESH` |
+| Occurrence cache (Macula count) | `WHERE book_num >= 40` | `WHERE book_num < 40` |
+| `lexicon_source` tag in bundle | `'tbESG+LSJ'` | `'tbESH'` |
+
+The routing is critical because Greek and Hebrew Strong's bare-int ranges overlap (e.g. G1 and H1 both normalize to bare int `'1'` via `normalize_strongs` in `build_lexicon_index.py`). The shared `macula_tokens` and `strongs_frequency` tables use `book_num` and `testament` as per-testament partition keys respectively.
 
 ## OT-Deferred Note
 
-This implementation is NT-only. Hebrew OT integration is deferred to a future plan per the architecture's "OT: TBD" note in the Macula Lookup step.
+~~This implementation is NT-only. Hebrew OT integration is deferred to a future plan per the architecture's "OT: TBD" note in the Macula Lookup step.~~
+
+**Resolved (2026-08-16):** The pipeline now supports both testaments end-to-end. Macula Hebrew WLC tokens and TBESH Lexicon senses are ingested by `scripts/download_macula_hebrew.py`, `scripts/build_macula_index.py --testament hebrew`, `scripts/build_strongs_frequency.py --testament hebrew`, and `scripts/build_lexicon_index.py --testament hebrew`. Per-hit routing by testament happens automatically in `ContextRetrievalService._build_bundle_for_hit`. See `tests/scripts/test_context_retrieval_hebrew.py` for the live contract and `tests/scripts/test_hebrew_ingest_integration.py` for ingest-path coverage.
 
 ## Known Limitations
 
-1. **Missing Gloss Column**: The `gloss` field on each kept_word is empty because todo 3's `macula_tokens` SQLite schema does not include the `gloss` column from the canonical TSV. Flagged for a follow-up "fix macula schema" plan.
+1. **Missing Gloss Column**: ~~The `gloss` field on each kept_word is empty because todo 3's `macula_tokens` SQLite schema does not include the `gloss` column from the canonical TSV. Flagged for a follow-up "fix macula schema" plan.~~ RESOLVED (Macula schema follow-up, 2026-08-16): the `gloss` column was added to `macula_tokens` and re-ingested from the canonical TSV for both Greek and Hebrew; regression canaries in `test_context_retrieval_service.py` and `test_context_retrieval_e2e.py` validate non-empty glosses.
 
-2. **Lexicon Source Substitution**: BDAG is explicitly excluded (copyrighted University of Chicago Press 2000). TBESG + LSJ are used instead with user approval.
+2. **Lexicon Source Substitution**: BDAG (Greek) and HALOT / TWOT (Hebrew) are explicitly excluded (copyrighted). For Greek, TBESG + LSJ are used instead. For Hebrew, TBESH is used. All three are public CC BY 4.0 from STEPBible.
+
+3. **Aramaic Verses**: The WLC includes Aramaic passages (Ezra 4:8–6:18, 7:12-26; Daniel 2:4–7:28; Jeremiah 10:11). TBESH designates Aramaic senses via the `Morph` column `A:` prefix. The current ingest treats all Hebrew-canon words uniformly; Aramaic-specific sense filtering is deferred until a use case materialises.
 
 ## Bundle Shape Example
 

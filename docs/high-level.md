@@ -8,7 +8,7 @@
 4. ✅ **Parallel Retrieval** — Embed each HyDE doc, search against English translations, top-K per doc
 5. **RRF Level 1** — Merge/rerank M result sets within each intent → one ranked list per intent
 6. **RRF Level 2** — Merge/rerank N per-intent lists → single candidate verse set
-7. ✅ **Macula Lookup** — Pull lemma/Strong's data for candidate set (NT: Macula Greek, OT: TBD)
+7. ✅ **Macula Lookup** — Pull lemma/Strong's data for candidate set (NT: Macula Greek, OT: Macula Hebrew WLC)
 8. **Graph Expansion** — Lemma-based/verse-graph traversal for cross-references
 9. ✅ **Re-rank/Organize** — Consolidate steps 6-8 into structured retrieval set
 10. **Synthesis** — Frontier model answers using retrieval + original prompt, citations linked

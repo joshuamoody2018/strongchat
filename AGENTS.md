@@ -1,7 +1,13 @@
 # AGENTS.md - StrongChat Agent Reference
 
-## ACTIVE WORK STATUS (updated 2026-08-02)
-context-retrieval in progress, near completion 2026-08-02 (todos 1-10 complete; final verification wave remaining).
+## ACTIVE WORK STATUS (updated 2026-08-16)
+context-retrieval OT (Hebrew) integration complete 2026-08-16. NT path
+unchanged; macula_tokens is now partitioned by book_num (< 40 Hebrew, >= 40
+Greek), strongs_frequency by testament, lexicon_definitions by lexicon_source
+(tbESG+lsj vs tbESH). Setup script + docs updated. NT-only live e2e test still
+un-addressed for OT (would require real ~80 MB Hebrew TSV download — synthetic
+fixture coverage in tests/scripts/test_hebrew_ingest_integration.py covers the
+ingest contract).
 
 ## Project operational conventions
 - Use `.venv/bin/python` for everything.

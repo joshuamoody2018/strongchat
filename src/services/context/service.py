@@ -11,6 +11,7 @@ from services.base import BaseService
 from config.context_constants import (
     POS_WEIGHTS, TOP_N_VECTOR_RESULTS, TOP_N_PERCENT_FINAL,
     MIN_WORDS_PER_VERSE, MIN_WORDS_AFTER_TRIM, composite_score,
+    get_pos_weight,
 )
 
 logger = logging.getLogger(__name__)
@@ -140,6 +141,28 @@ class ContextRetrievalService(BaseService):
                 reason=f'no macula tokens for {book_osis} {chapter}:{verse}',
             )
 
+        # Derive language/testament from the first token's book_num.
+        # OT books are 1-39; NT are 40-66. Routed lookup is critical because
+        # Greek (tbESG+lsj) and Hebrew (tbESH) share bare-int strongs keys
+        # but live as separate lexicon_source rows; querying without the
+        # filter would conflate definitions and frequencies across
+        # testaments. Backup: consult _BOOK_OSIS_LANGUAGE if book_num is
+        # somehow missing (defensive — should never happen since
+        # macula_tokens.book_num is NOT NULL).
+        first_book_num = tokens[0].get('book_num')
+        if first_book_num is not None and first_book_num < 40:
+            language = 'hebrew'
+            testament = 'OT'
+        else:
+            language = 'greek'
+            testament = 'NT'
+        # Defensive: if book_num is None pick via OSIS lookup so we still
+        # route correctly when the schema is missing book_num.
+        if first_book_num is None:
+            looked_up = _BOOK_OSIS_LANGUAGE.get(book_osis, 'greek')
+            language = looked_up
+            testament = _LANG_TO_TESTAMENT[looked_up]
+
         # Deduplicate by strongs to get unique words
         unique_words = _dedupe_tokens_by_strongs(tokens)
         if len(unique_words) < MIN_WORDS_PER_VERSE:
@@ -150,9 +173,20 @@ class ContextRetrievalService(BaseService):
 
         # Look up frequency + senses for each unique word
         strongs_numbers = [w['strongs'] for w in unique_words if w['strongs']]
-        freq_map = await asyncio.to_thread(self._fetch_freq_map, strongs_numbers)
-        senses_map = await asyncio.to_thread(self._fetch_senses_map, strongs_numbers)
-        occurrence_cache = await asyncio.to_thread(self._build_occurrence_cache, strongs_numbers)
+        freq_map = await asyncio.to_thread(
+            self._fetch_freq_map, strongs_numbers, testament,
+        )
+        senses_map = await asyncio.to_thread(
+            self._fetch_senses_map, strongs_numbers, language,
+        )
+        occurrence_cache = await asyncio.to_thread(
+            self._build_occurrence_cache, strongs_numbers, language,
+        )
+
+        # Pick the lexicon_source tag communicated to the synthesis stage.
+        # Greek path reports 'tbESG+LSJ' (union of two Greek lexicons);
+        # Hebrew path reports 'tbESH'. Tests assert against these strings.
+        lexicon_source_tag = 'tbESH' if language == 'hebrew' else 'tbESG+LSJ'
 
         # Score each word and build scored_words list
         scored_words = []
@@ -161,7 +195,7 @@ class ContextRetrievalService(BaseService):
             if not strongs:
                 continue
             pos = w.get('pos', '')
-            pos_weight = _get_pos_weight(pos)
+            pos_weight = _get_pos_weight(pos, language)
             freq_count = freq_map.get(strongs, 1)
             senses = senses_map.get(strongs, [])
             sense_count = len(senses) if senses else 1
@@ -178,7 +212,7 @@ class ContextRetrievalService(BaseService):
                 'composite_score': score,
                 'definitions': [s for s in senses],
                 'gloss': w['gloss'],  # Direct access - gloss should always be present after schema fix
-                'lexicon_source': 'tbESG+LSJ',
+                'lexicon_source': lexicon_source_tag,
                 'macula_occurrences': occurrence_cache.get(strongs, 0),
             })
 
@@ -215,18 +249,28 @@ class ContextRetrievalService(BaseService):
         conn = sqlite3.connect(self._macula_db_path)
         try:
             cur = conn.execute(
-                "SELECT surface, lemma, strongs, morph, pos, gloss FROM macula_tokens "
+                "SELECT surface, lemma, strongs, morph, pos, gloss, book_num "
+                "FROM macula_tokens "
                 "WHERE book_osis=? AND chapter=? AND verse=? ORDER BY word_pos",
                 (book_osis, chapter, verse),
             )
             return [
-                {'surface': r[0], 'lemma': r[1], 'strongs': r[2], 'morph': r[3], 'pos': r[4], 'gloss': r[5]}
+                {
+                    'surface': r[0], 'lemma': r[1], 'strongs': r[2],
+                    'morph': r[3], 'pos': r[4], 'gloss': r[5],
+                    'book_num': r[6],
+                }
                 for r in cur.fetchall()
             ]
         finally:
             conn.close()
 
-    def _fetch_freq_map(self, strongs_numbers: List[str]) -> Dict[str, int]:
+    def _fetch_freq_map(
+        self, strongs_numbers: List[str], testament: str,
+    ) -> Dict[str, int]:
+        """Look up corpus frequency for each strongs number, filtered
+        by testament ('NT' or 'OT') to avoid Greek/Hebrew bare-int key
+        collisions in the shared strongs_frequency table."""
         if not strongs_numbers:
             return {}
         placeholders = ','.join('?' * len(strongs_numbers))
@@ -234,25 +278,39 @@ class ContextRetrievalService(BaseService):
         try:
             cur = conn.execute(
                 f"SELECT strongs_number, occurrence_count FROM strongs_frequency "
-                f"WHERE strongs_number IN ({placeholders})",
-                strongs_numbers,
+                f"WHERE testament=? AND strongs_number IN ({placeholders})",
+                (testament, *strongs_numbers),
             )
             return {r[0]: r[1] for r in cur.fetchall()}
         finally:
             conn.close()
 
     def _fetch_senses_map(
-        self, strongs_numbers: List[str],
+        self, strongs_numbers: List[str], language: str,
     ) -> Dict[str, List[str]]:
+        """Look up lexicon sense definitions for each strongs number,
+        filtered by lexicon_source based on language so Greek keys do
+        not pick up Hebrew TBESH entries and vice-versa.
+
+        Greek path: tbESG + lsj (definitions concatenated in order).
+        Hebrew path: tbESH only.
+        """
         if not strongs_numbers:
             return {}
+        if language == 'hebrew':
+            lexicon_sources = ('tbESH',)
+        else:
+            lexicon_sources = ('tbESG', 'lsj')
         placeholders = ','.join('?' * len(strongs_numbers))
+        src_placeholders = ','.join('?' * len(lexicon_sources))
         conn = sqlite3.connect(self._macula_db_path)
         try:
             cur = conn.execute(
                 f"SELECT strongs_number, definition FROM lexicon_definitions "
-                f"WHERE strongs_number IN ({placeholders}) ORDER BY strongs_number, sense_index",
-                strongs_numbers,
+                f"WHERE strongs_number IN ({placeholders}) "
+                f"AND lexicon_source IN ({src_placeholders}) "
+                f"ORDER BY strongs_number, lexicon_source, sense_index",
+                (*strongs_numbers, *lexicon_sources),
             )
             out: Dict[str, List[str]] = {}
             for r in cur.fetchall():
@@ -261,15 +319,25 @@ class ContextRetrievalService(BaseService):
         finally:
             conn.close()
 
-    def _build_occurrence_cache(self, strongs_numbers: List[str]) -> Dict[str, int]:
+    def _build_occurrence_cache(
+        self, strongs_numbers: List[str], language: str,
+    ) -> Dict[str, int]:
+        """Count Macula-token occurrences for each strongs number,
+        filtered by testament (book_num range) so Greek and Hebrew
+        keys with the same bare-int value are not conflated."""
         if not strongs_numbers:
             return {}
+        if language == 'hebrew':
+            book_filter = "book_num < 40"
+        else:
+            book_filter = "book_num >= 40"
         placeholders = ','.join('?' * len(strongs_numbers))
         conn = sqlite3.connect(self._macula_db_path)
         try:
             cur = conn.execute(
                 f"SELECT strongs, COUNT(*) FROM macula_tokens "
-                f"WHERE strongs IN ({placeholders}) GROUP BY strongs",
+                f"WHERE {book_filter} AND strongs IN ({placeholders}) "
+                f"GROUP BY strongs",
                 strongs_numbers,
             )
             return {r[0]: r[1] for r in cur.fetchall()}
@@ -326,11 +394,50 @@ BOOK_OSIS_NAME = {
 
 # OSIS short codes as they appear in the Macula DB (identity map for already-OSIS inputs)
 BOOK_OSIS_IDENTITY = {
+    # NT
     'Matt': 'Matt', 'Mark': 'Mark', 'Luke': 'Luke', 'John': 'John', 'Acts': 'Acts', 'Rom': 'Rom',
     '1Cor': '1Cor', '2Cor': '2Cor', 'Gal': 'Gal', 'Eph': 'Eph', 'Phil': 'Phil', 'Col': 'Col',
     '1Thess': '1Thess', '2Thess': '2Thess', '1Tim': '1Tim', '2Tim': '2Tim', 'Titus': 'Titus', 'Phlm': 'Phlm',
     'Heb': 'Heb', 'Jas': 'Jas', '1Pet': '1Pet', '2Pet': '2Pet', '1John': '1John', '2John': '2John', '3John': '3John', 'Jude': 'Jude', 'Rev': 'Rev',
+    # OT — bare OSIS short codes ('Gen', 'Isa', 'Ps', etc.) resolve to themselves
+    'Gen': 'Gen', 'Exod': 'Exod', 'Lev': 'Lev', 'Num': 'Num', 'Deut': 'Deut',
+    'Josh': 'Josh', 'Judg': 'Judg', 'Ruth': 'Ruth',
+    '1Sam': '1Sam', '2Sam': '2Sam', '1Kgs': '1Kgs', '2Kgs': '2Kgs',
+    '1Chr': '1Chr', '2Chr': '2Chr', 'Ezra': 'Ezra', 'Neh': 'Neh', 'Esth': 'Esth',
+    'Job': 'Job', 'Ps': 'Ps', 'Prov': 'Prov', 'Eccl': 'Eccl', 'Song': 'Song',
+    'Isa': 'Isa', 'Jer': 'Jer', 'Lam': 'Lam', 'Ezek': 'Ezek', 'Dan': 'Dan',
+    'Hos': 'Hos', 'Joel': 'Joel', 'Amos': 'Amos', 'Obad': 'Obad', 'Jonah': 'Jonah',
+    'Mic': 'Mic', 'Nah': 'Nah', 'Hab': 'Hab', 'Zeph': 'Zeph',
+    'Hag': 'Hag', 'Zech': 'Zech', 'Mal': 'Mal',
 }
+
+# Per-testament language tag. Greek NT OSIS codes -> 'greek'; Hebrew OT
+# OSIS codes -> 'hebrew'. Used by ContextRetrievalService to route pos
+# weights, frequency filters, and lexicon source filters without needing
+# to query the DB just to know the testament.
+_BOOK_OSIS_LANGUAGE = {
+    # NT
+    'Matt': 'greek', 'Mark': 'greek', 'Luke': 'greek', 'John': 'greek',
+    'Acts': 'greek', 'Rom': 'greek', '1Cor': 'greek', '2Cor': 'greek',
+    'Gal': 'greek', 'Eph': 'greek', 'Phil': 'greek', 'Col': 'greek',
+    '1Thess': 'greek', '2Thess': 'greek', '1Tim': 'greek', '2Tim': 'greek',
+    'Titus': 'greek', 'Phlm': 'greek', 'Heb': 'greek', 'Jas': 'greek',
+    '1Pet': 'greek', '2Pet': 'greek', '1John': 'greek', '2John': 'greek',
+    '3John': 'greek', 'Jude': 'greek', 'Rev': 'greek',
+    # OT
+    'Gen': 'hebrew', 'Exod': 'hebrew', 'Lev': 'hebrew', 'Num': 'hebrew',
+    'Deut': 'hebrew', 'Josh': 'hebrew', 'Judg': 'hebrew', 'Ruth': 'hebrew',
+    '1Sam': 'hebrew', '2Sam': 'hebrew', '1Kgs': 'hebrew', '2Kgs': 'hebrew',
+    '1Chr': 'hebrew', '2Chr': 'hebrew', 'Ezra': 'hebrew', 'Neh': 'hebrew',
+    'Esth': 'hebrew', 'Job': 'hebrew', 'Ps': 'hebrew', 'Prov': 'hebrew',
+    'Eccl': 'hebrew', 'Song': 'hebrew', 'Isa': 'hebrew', 'Jer': 'hebrew',
+    'Lam': 'hebrew', 'Ezek': 'hebrew', 'Dan': 'hebrew', 'Hos': 'hebrew',
+    'Joel': 'hebrew', 'Amos': 'hebrew', 'Obad': 'hebrew', 'Jonah': 'hebrew',
+    'Mic': 'hebrew', 'Nah': 'hebrew', 'Hab': 'hebrew', 'Zeph': 'hebrew',
+    'Hag': 'hebrew', 'Zech': 'hebrew', 'Mal': 'hebrew',
+}
+_TESTAMENT_TO_LANG = {'NT': 'greek', 'OT': 'hebrew'}
+_LANG_TO_TESTAMENT = {'greek': 'NT', 'hebrew': 'OT'}
 
 
 def _book_to_osis(book: str) -> Optional[str]:
@@ -389,19 +496,17 @@ def _parse_reference(reference: str) -> Optional[Tuple[str, int, int]]:
     return (book_osis, chapter, verse)
 
 
-def _get_pos_weight(pos: str) -> float:
-    """Look up POS weight from the POS_WEIGHTS dict.
+def _get_pos_weight(pos: str, language: str = 'greek') -> float:
+    """Look up POS weight from the language-appropriate POS_WEIGHTS table.
 
-    POS_WEIGHTS keys are prefixes (e.g. 'V-', 'N-'). Match by longest prefix.
-    Unknown POS returns the default weight of 0.50.
+    Greek: Robinson codes ('V-', 'N-', ...). Longest-prefix match applies
+    so codes like 'V-3SAI' resolve to 'V-'.
+    Hebrew: HAM lowercase codes ('verb', 'subs', ...). Exact match only
+    (no prefix rule, since HAM codes are full lowercase trigrams).
+
+    Returns the configured weight, defaulting to 0.50 for unknown codes.
     """
-    if pos in POS_WEIGHTS:
-        return POS_WEIGHTS[pos]
-    # Try prefix matching: 'V-3SAI' → 'V-'
-    for prefix, weight in POS_WEIGHTS.items():
-        if pos.startswith(prefix):
-            return weight
-    return 0.50
+    return get_pos_weight(pos, language=language)
 
 
 def _dedupe_tokens_by_strongs(tokens: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

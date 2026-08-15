@@ -152,20 +152,20 @@ flowchart TD
         subgraph PER_HIT ["per candidate verse — serial within intent"]
             direction TB
             REF[/"Parse verse reference<br/>book / chapter / verse"/]:::impl_compute
-            MAC[("SQLite<br/>macula_tokens<br/>lemma + Strong's + morph + gloss")]:::impl_db
-            POSF[/"POS filter<br/>drop closed-class (pronouns etc.)<br/>apply POS_WEIGHTS table"/]:::impl_compute
-            FREQ[("SQLite<br/>strongs_frequency<br/>NT corpus count per Strong's #")]:::impl_db
-            SENSE[("SQLite<br/>lexicon_definitions<br/>TBESG + Thayer's sense count")]:::impl_db
+            MAC[("SQLite<br/>macula_tokens<br/>Greek (book_num>=40) + Hebrew (book_num<40) — lemma + Strong's + morph + gloss")]:::impl_db
+            POSF[/"POS filter + language routing<br/>Greek: POS_WEIGHTS (Robinson) · Hebrew: POS_WEIGHTS_HEBREW (HAM)"/]:::impl_compute
+            FREQ[("SQLite<br/>strongs_frequency<br/>corpus count per Strong's #<br/>filtered by testament NT/OT")]:::impl_db
+            SENSE[("SQLite<br/>lexicon_definitions<br/>Greek: tbESG + lsj · Hebrew: tbESH<br/>filtered by lexicon_source")]:::impl_db
             SCORE[/"composite_score =<br/>pos_weight × log1p(1/freq) × log1p(senses)"/]:::impl_compute
             TRIM[/"trim top 20%<br/>min 2 kept per verse"/]:::impl_compute
-            BUNDLE["attach context_bundle<br/>scored_words + kept_words"]:::impl_data
+            BUNDLE["attach context_bundle<br/>scored_words + kept_words<br/>lexicon_source tag: 'tbESG+LSJ' | 'tbESH'"]:::impl_data
 
             REF --> MAC --> POSF --> FREQ --> SENSE --> SCORE --> TRIM --> BUNDLE
         end
     end
     PAR_CTX -. records .-> MC[("messages rows<br/>context_retrieval × intent")]:::impl_db
 
-    BUNDLE --> EXPAND[("Graph Expansion<br/>lemma / verse-graph cross-refs<br/>OT: TBD")]:::planned_db
+    BUNDLE --> EXPAND[("Graph Expansion<br/>lemma / verse-graph cross-refs<br/>not yet implemented for either testament")]:::planned_db
     EXPAND --> ORG[/"Re-rank / Organize<br/>consolidate 6-8 into retrieval set"/]:::impl_compute
     ORG --> OUT["Structured retrieval set<br/>ready for synthesis step 10"]:::data
 ```

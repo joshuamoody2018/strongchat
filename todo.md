@@ -50,6 +50,33 @@
 - [x] Add regression canaries to all 3 context-retrieval test files
       (`definitions` non-empty, `gloss` non-empty, per-word schema validation)
 
+### Hebrew OT Macula integration ✅ (2026-08-16)
+- [x] Add `BOOK_NUM_TO_OSIS_OT` (1..39) + OT-aware `parse_xml_id_hebrew`
+      (13-char `o` + 4-digit word_slot) to `scripts/build_macula_index.py`,
+      routed via `--testament {greek,hebrew}`
+- [x] Add `scripts/download_macula_hebrew.py` (LFS-pointer resolver + canonical
+      TSV projector + manifest writer)
+- [x] Extend `scripts/build_strongs_frequency.py` with `--testament` path
+      partitioning `strongs_frequency.testament` ('NT' vs 'OT')
+- [x] Extend `scripts/build_lexicon_index.py` to ingest TBESH (Hebrew CC BY 4.0)
+      under `lexicon_source='tbESH'`; generalise `parse_tsv_content` to support
+      Hebrew headers; permit letter-suffixed strongs keys in validation
+- [x] Add `POS_WEIGHTS_HEBREW` (HAM codes: verb 0.95, subs/nmpr 0.825, ...)
+      + language-routed `get_pos_weight(pos, language)` in `config/context_constants.py`
+- [x] Route `ContextRetrievalService` per hit by `book_num < 40`: filter
+      `strongs_frequency.testament`, `lexicon_definitions.lexicon_source`,
+      occurrence cache by `book_num` range, and pick HAM vs Robinson POS weights
+- [x] Add `_BOOK_OSIS_LANGUAGE` map + extend `BOOK_OSIS_IDENTITY` to include
+      OT OSIS codes for already-OSIS inputs
+- [x] Add 4 boilerplate/test files:
+      `test_normalize_strongs.py`, `test_build_macula_index_ot.py`,
+      `test_context_constants_hebrew.py`, `test_context_retrieval_hebrew.py`,
+      `test_hebrew_ingest_integration.py` (50 new tests, all passing)
+- [x] Update `scripts/setup_environment.sh` to bootstrap Hebrew corpus +
+      lexicon + frequency partitions alongside Greek path
+- [x] Update docs (`pipeline-context-retrieval.md`, `architecture-diagram.md`,
+      `README.md`, `high-level.md`)
+
 ## Next steps
 
 ### Short Term
@@ -63,7 +90,7 @@
   parallel `asyncio.to_thread` calls without the declared `self._macula_lock`
   being acquired anywhere. Causes intermittent `InterfaceError: bad parameter
   or other API misuse` under live parallel intent processing.
-- Hebrew OT Macula integration (architecture/high-level.md notes 'OT: TBD')
+- ~~Hebrew OT Macula integration (architecture/high-level.md notes 'OT: TBD')~~ ✅ DONE (2026-08-16). See `docs/pipeline-context-retrieval.md` and the "Hebrew OT Macula integration" section above.
 
 ### Medium Term
 - Implement RRF ranking (steps 5-6)
