@@ -4,7 +4,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from services.base import BaseService
 from services.context import ContextRetrievalService
@@ -15,6 +15,20 @@ from services.retrieval import RetrievalService
 from services.vectordb import VerseStore
 
 logger = logging.getLogger(__name__)
+
+#: Optional progress reporter the runner invokes at each major pipeline stage.
+#:
+#: Called as ``await progress(stage, message, progress=None, total=None)``.
+#: ``stage`` is a short snake_case identifier; ``message`` is human-readable
+#: text safe to surface to an end user (e.g. inside an MCP progress
+#: notification); ``progress``/``total`` are optional numeric progress
+#: fractions when a stage knows them. The callback is strictly
+#: informational — the runner ignores its return value and never blocks on
+#: it failing. Stages emitted today: ``intent``, ``hyde``, ``retrieval``,
+#: ``context``, ``serialize``.
+ProgressCallback = Callable[
+    [str, str, "Optional[float]", "Optional[float]"], Awaitable[None]
+]
 
 
 @dataclass
@@ -158,6 +172,7 @@ class PipelineRunner(BaseService):
         query: str,
         top_k: int = 10,
         translations: tuple[str, ...] = ("kjv", "web"),
+        progress: Optional[ProgressCallback] = None,
     ) -> PipelineResult:
         """Execute the full pipeline for a user query.
 
@@ -171,6 +186,13 @@ class PipelineRunner(BaseService):
             query: The raw user query.
             top_k: Number of nearest neighbors per HyDE document/translation.
             translations: Translation slugs to query.
+            progress: Optional async callback invoked at each major
+                pipeline stage with ``(stage, message, progress, total)``.
+                Used by the MCP server to surface ``report_progress``
+                notifications to the calling agent (e.g. streamed into the
+                Claude.ai UI as the user waits). The runner never blocks
+                on this callback; failures inside it are swallowed and
+                logged. The pipeline result is unaffected.
 
         Returns:
             ``PipelineResult`` with the correlation id, original query,
@@ -189,13 +211,44 @@ class PipelineRunner(BaseService):
             },
         )
 
+        async def _report(stage: str, message: str,
+                          done: Optional[float] = None,
+                          total: Optional[float] = None) -> None:
+            """Forward a stage event to the caller's progress callback.
+
+            Failures are swallowed: the progress callback is informational
+            only and MUST NOT change pipeline behaviour. The MCP layer
+            wraps this in its own try/except as well, but the runner-level
+            guard means a buggy transport callback can never poison a run.
+            """
+            if progress is None:
+                return
+            try:
+                await progress(stage, message, done, total)
+            except Exception as exc:  # noqa: BLE001 - informational only
+                self.logger.warning(
+                    "progress_callback_error",
+                    extra={
+                        "event": "progress_callback_error",
+                        "correlation_id": correlation_id,
+                        "stage": stage,
+                        "error": str(exc),
+                    },
+                )
+
         try:
             # Stage 1: Intent — create one empty trace per intent.
+            await _report("intent", "Extracting query intent…")
             intent_response = await self.intent_service.generate_intents(
                 query, correlation_id
             )
             intents = intent_response["intents"]
             query_analysis = intent_response.get("query_analysis", {})
+            await _report(
+                "intent",
+                f"Intent extracted ({len(intents)} intent(s)).",
+                done=1.0, total=1.0,
+            )
 
             traces: Dict[str, IntentTrace] = {}
             for intent in intents:
@@ -206,6 +259,7 @@ class PipelineRunner(BaseService):
                 )
 
             # Stage 2: HyDE — attach hyde_document or hyde_error to each trace.
+            await _report("hyde", "Generating HyDE passages…")
             hyde_docs = await self.hyde_service.generate_for_intents(
                 intents, correlation_id
             )
@@ -215,8 +269,18 @@ class PipelineRunner(BaseService):
                     traces[intent_id].hyde_document = hd.get("hyde_document")
                     if hd.get("error") is not None:
                         traces[intent_id].hyde_error = hd["error"]
+            hyde_ok = sum(1 for t in traces.values() if t.hyde_document)
+            await _report(
+                "hyde",
+                f"HyDE complete ({hyde_ok}/{len(traces)} docs).",
+                done=1.0, total=1.0,
+            )
 
             # Stage 3+4: Embedding + retrieval.
+            await _report(
+                "retrieval",
+                f"Searching {len(translations)} translation(s) for nearest verses…",
+            )
             retrieval_results = await self.retrieval_service.search(
                 hyde_docs,
                 correlation_id,
@@ -231,6 +295,15 @@ class PipelineRunner(BaseService):
                     translation = r.get("translation")
                     if translation is not None:
                         traces[intent_id].search_results[translation] = r.get("hits", [])
+            total_hits = sum(
+                len(hits) for trace in traces.values()
+                for hits in trace.search_results.values()
+            )
+            await _report(
+                "retrieval",
+                f"Retrieval complete ({total_hits} verse hits).",
+                done=1.0, total=1.0,
+            )
 
             result = PipelineResult(
                 session_uuid=correlation_id,
@@ -239,7 +312,11 @@ class PipelineRunner(BaseService):
                 query_analysis=query_analysis,
             )
 
-            # Stage 5: Context retrieval — attach original-language bundles to each hit.
+            # Stage 5: Context retrieval — attach original-language bundles.
+            await _report(
+                "context",
+                "Resolving original-language context bundles…",
+            )
             try:
                 await self.context_service.retrieve_for_pipeline(result, correlation_id)
             except Exception as e:
@@ -251,7 +328,13 @@ class PipelineRunner(BaseService):
                         "error": str(e),
                     },
                 )
+            await _report(
+                "context",
+                "Original-language context resolved.",
+                done=1.0, total=1.0,
+            )
 
+            await _report("serialize", "Serializing context bundle…")
             self.logger.info(
                 "pipeline_end",
                 extra={

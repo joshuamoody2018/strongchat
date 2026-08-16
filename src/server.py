@@ -18,22 +18,38 @@ Nothing server-side remembers anything between calls — each call is a pure
 function of its inputs. The agent's context window threads state across the
 loop; the server doesn't need session storage or correlation by id.
 
-Run as a stdio server (default for Claude Desktop / opencode / local agents):
+## Transports
+
+The server supports two transports, selected by the ``STRONGCHAT_MCP_TRANSPORT``
+environment variable (or ``--transport <stdio|http>`` argv override):
+
+* **stdio** (default): JSON-RPC over the process's stdin/stdout. Used by
+  Claude Desktop / opencode / local agents that spawn this server. Inline
+  ``notifications/progress`` and ``notifications/message`` (log) records
+  flow back over the same stdio pipe so any watching client can surface
+  pipeline stage events while a tool call is in flight.
 
     .venv/bin/python src/server.py
 
-Or wire into Claude Desktop's ``claude_desktop_config.json``:
+* **streamable-http** (``STRONGCHAT_MCP_TRANSPORT=http`` or ``--transport http``):
+  Anthropic's streamable MCP-over-HTTP+SSE transport. The server runs a
+  uvicorn ASGI loop on ``127.0.0.1:8765`` by default
+  (``STRONGCHAT_HOST`` / ``STRONGCHAT_PORT`` override). Use this for remote
+  hosting behind a reverse proxy (Caddy / nginx). The same progress + log
+  notifications are streamed over the SSE response stream so a remote agent
+  (e.g. claude.ai's hosted MCP custom-connector, or any HTTP client
+  speaking MCP streamable-http) can show the user pipeline progress as it
+  happens.
 
-    {
-      "mcpServers": {
-        "strongchat": {
-          "command": "/abs/path/to/strongchat/.venv/bin/python",
-          "args": ["/abs/path/to/strongchat/src/server.py"]
-        }
-      }
-    }
+    STRONGCHAT_MCP_TRANSPORT=http .venv/bin/python src/server.py
+    # then connect a client to http://127.0.0.1:8765/mcp
+
+For public exposure wrap this with the included ``deploy/Caddyfile`` (which
+terminates TLS via sslip.io on-demand certs and forwards a bearer API key
+configured via ``STRONGCHAT_API_KEY``).
 """
 
+import argparse
 import asyncio
 import json
 import os
@@ -48,6 +64,29 @@ from dotenv import load_dotenv
 
 from config.logging import configure_logging
 from services.pipeline import PipelineRunner, pipeline_result_to_bundle
+from services.pipeline.runner import ProgressCallback
+
+# Import the high-level MCP request Context at module scope so tools nested
+# inside ``_setup_and_build_mcp`` can annotate ``ctx: Context`` and the
+# SDK's ``find_context_parameter`` is able to resolve the name from the
+# function's ``__globals__`` (= this module).
+#
+# IMPORTANT: on mcp v2.x, the Context that the tool framework actually
+# matches against is ``mcp.server.mcpserver.context.Context`` (a pydantic
+# BaseModel wrapper), NOT the lower-level ``mcp.server.context.Context``
+# (which is the BaseContext protocol-style class). Passing the wrong one
+# here means the SDK's ``find_context_parameter`` would not detect the
+# kwarg, pydantic would try to emit a JSON schema for it, and tool
+# registration would crash with ``PydanticInvalidForJsonSchema``.
+# Pre-v2 SDKs may not expose this path; in that case we degrade gracefully
+# to a no-progress variant.
+try:
+    from mcp.server.mcpserver.context import Context  # noqa: F401  (annotation)
+except ImportError:  # pragma: no cover - pre-v2 SDK fallback
+    try:
+        from mcp.server.fastmcp import Context  # type: ignore # noqa: F401
+    except ImportError:
+        Context = None  # type: ignore[assignment]
 
 
 # Tool input/output schemas surface to the agent as JSON Schema. Defined here
@@ -116,12 +155,15 @@ async def retrieve_context_impl(
     query: str,
     top_k: int = 10,
     translations: list[str] | None = None,
+    progress: ProgressCallback | None = None,
 ) -> dict:
     """Pure-function implementation of the retrieve_context tool.
 
     Exposed separately from the MCP decorator so it can be unit-tested
-    directly (no stdio round-trip needed). The MCP tool wrapper below calls
-    this.
+    directly (no stdio or HTTP round-trip needed). The MCP tool wrapper
+    below calls this, forwarding a ``progress`` callback that bridges the
+    pipeline's stage events onto the MCP client's progress / log
+    notification stream.
     """
     if translations is None:
         translations = ["kjv", "web"]
@@ -131,6 +173,7 @@ async def retrieve_context_impl(
             query=query,
             top_k=top_k,
             translations=tuple(translations),
+            progress=progress,
         )
         return pipeline_result_to_bundle(result)
     finally:
@@ -198,6 +241,12 @@ async def _setup_and_build_mcp():
             )
             raise
 
+    # ``Context`` is imported at module scope (see top of file) so that
+    # ``find_context_parameter`` can resolve the ``ctx: Context``
+    # annotation on the tool wrapper below from the function's globals.
+    # Pre-v2 SDK paths degrade to ``Context = None``, in which case the
+    # tool falls back to a no-op progress callback (pipelines still run;
+    # the agent just loses streaming notifications).
     mcp = MCPServer(name="strongchat", description=(
         "StrongChat retrieve_context + validate_answer MCP server. "
         "retrieve_context runs the intent -> HyDE -> retrieval -> "
@@ -207,24 +256,93 @@ async def _setup_and_build_mcp():
         "agent harness / wrapper that drives state management."
     ))
 
-    @mcp.tool(
-        name="retrieve_context",
-        description=(
-            "Retrieve Bible verses with original-language context bundles "
-            "for a plain-language query. Returns a structured JSON bundle "
-            "(query_analysis, per-intent traces with hits and context_bundle). "
-            "Pass the entire returned bundle back as the `context` argument "
-            "to validate_answer to fact-check a synthesized answer."
-        ),
-    )
-    async def retrieve_context(
-        query: str,
-        top_k: int = 10,
-        translations: list[str] | None = None,
-    ) -> dict:
-        return await retrieve_context_impl(
-            query, top_k=top_k, translations=translations
+    def _make_progress_callback(ctx):
+        """Build a ProgressCallback that bridges pipeline stage events onto
+        the MCP client's ``notifications/progress`` and
+        ``notifications/message`` (log) streams.
+
+        Returns ``None`` when ``ctx`` is missing (offline unit tests / a
+        pre-v2 SDK) — the pipeline treats ``None`` as "no streaming".
+        """
+        if ctx is None:
+            return None
+
+        async def _cb(stage: str, message: str,
+                      done: float | None = None,
+                      total: float | None = None) -> None:
+            try:
+                # structured progress notification for clients that surface
+                # progress bars / waiting indicators.
+                if hasattr(ctx, "report_progress"):
+                    if done is not None and total is not None:
+                        await ctx.report_progress(done, total, message)
+                    else:
+                        await ctx.report_progress(0, 0, message)
+                # human-readable notice (level=info) carrying the stage
+                # name + message — Claude.ai shows these inline.
+                if hasattr(ctx, "info"):
+                    await ctx.info(f"[{stage}] {message}")
+                elif hasattr(ctx, "log"):
+                    await ctx.log("info", f"[{stage}] {message}")
+            except Exception:
+                # The pipeline already wraps callbacks in try/except, but
+                # defensive: a closed transport mid-flight must not break
+                # the actual retrieval. Hand the failure back to the
+                # caller's logger (the MCPServer prints context log errors
+                # itself); otherwise swallow.
+                return
+
+        return _cb
+
+    # The tool signature changes based on whether ``Context`` is importable
+    # on this SDK. We register a thin wrapper that takes ``ctx`` when
+    # available so the framework injects the live request context; the
+    # underlying impl stays context-free for offline tests.
+
+    if Context is not None:
+        @mcp.tool(
+            name="retrieve_context",
+            description=(
+                "Retrieve Bible verses with original-language context bundles "
+                "for a plain-language query. Returns a structured JSON bundle "
+                "(query_analysis, per-intent traces with hits and "
+                "context_bundle). Pass the entire returned bundle back as "
+                "the `context` argument to validate_answer to fact-check a "
+                "synthesized answer. Emits streaming progress notifications "
+                "at each major pipeline stage (intent, hyde, retrieval, "
+                "context, serialize) while the call is in flight."
+            ),
         )
+        async def retrieve_context(
+            query: str,
+            top_k: int = 10,
+            translations: list[str] | None = None,
+            ctx: Context = None,  # type: ignore[valid-type]
+        ) -> dict:
+            return await retrieve_context_impl(
+                query, top_k=top_k, translations=translations,
+                progress=_make_progress_callback(ctx),
+            )
+    else:  # pragma: no cover - SDK without Context support
+        @mcp.tool(
+            name="retrieve_context",
+            description=(
+                "Retrieve Bible verses with original-language context bundles "
+                "for a plain-language query. Returns a structured JSON "
+                "bundle (query_analysis, per-intent traces with hits and "
+                "context_bundle). Pass the entire returned bundle back as "
+                "the `context` argument to validate_answer to fact-check a "
+                "synthesized answer."
+            ),
+        )
+        async def retrieve_context(
+            query: str,
+            top_k: int = 10,
+            translations: list[str] | None = None,
+        ) -> dict:
+            return await retrieve_context_impl(
+                query, top_k=top_k, translations=translations,
+            )
 
     @mcp.tool(
         name="validate_answer",
@@ -241,18 +359,90 @@ async def _setup_and_build_mcp():
     return mcp
 
 
+def _select_transport() -> tuple[str, str, int]:
+    """Pick the transport from argv / env.
+
+    Returns ``(transport, host, port)``. Precedence:
+
+    1. ``--transport <stdio|http>`` argv (long form); ``--host`` / ``--port``.
+    2. ``STRONGCHAT_MCP_TRANSPORT``, ``STRONGCHAT_HOST``, ``STRONGCHAT_PORT``
+       env vars.
+    3. Defaults: ``stdio`` / ``127.0.0.1`` / ``8765``.
+
+    Unknown argv values fall back to env / defaults rather than crashing —
+    a misconfigured launcher should still boot, just on the safe default.
+    """
+    parser = argparse.ArgumentParser(
+        prog="strongchat-mcp",
+        description="StrongChat MCP server (stdio or streamable-http).",
+        add_help=True,
+    )
+    parser.add_argument("--transport", choices=["stdio", "http"],
+                        default=None)
+    parser.add_argument("--host", default=None)
+    parser.add_argument("--port", type=int, default=None)
+    # Parse only the flags we recognize; ignore everything else so MCP
+    # clients that pass their own argv through (e.g. a wrapper script)
+    # don't crash us.
+    args, _unknown = parser.parse_known_args()
+
+    transport = (
+        args.transport
+        or os.environ.get("STRONGCHAT_MCP_TRANSPORT", "stdio")
+    ).lower()
+    if transport not in ("stdio", "http"):
+        transport = "stdio"
+
+    host = args.host or os.environ.get("STRONGCHAT_HOST", "127.0.0.1")
+    port = args.port or int(os.environ.get("STRONGCHAT_PORT", "8765"))
+    return transport, host, port
+
+
 def main() -> int:
-    """Run the MCP stdio server. Never returns under normal operation."""
+    """Run the MCP server (stdio by default; streamable-http on request).
+
+    Never returns under normal operation.
+    """
+    transport, host, port = _select_transport()
+
     try:
         mcp = asyncio.run(_setup_and_build_mcp())
     except ImportError:
         return 1
 
-    # MCPServer.run() is the synchronous entry on v2.x: it wraps anyio.run
-    # internally and owns the event loop for the lifetime of the server.
-    # On v1.x FastMCP, run() also works (defaults to stdio). Either way
-    # this call owns the loop and we must NOT be inside asyncio.run when
-    # we call it.
+    if transport == "http":
+        # mcp v2.x: run(transport="streamable-http", host=, port=) wraps anyio
+        # + uvicorn internally. Older v1.x signatures raised TypeError on the
+        # extra kwargs; we fall back to streamable_http_app + a direct
+        # uvicorn serve for those.
+        if hasattr(mcp, "run"):
+            try:
+                mcp.run(transport="streamable-http", host=host, port=port)
+                return 0
+            except TypeError:
+                pass  # fall through to manual uvicorn wiring
+        # Manual wiring: build a Starlette ASGI app and run it ourselves.
+        try:
+            import uvicorn
+        except ImportError:
+            print(
+                "ERROR: streamable-http transport needs uvicorn. "
+                "Run `pip install uvicorn starlette sse-starlette`.",
+                file=sys.stderr,
+            )
+            return 1
+        if not hasattr(mcp, "streamable_http_app"):
+            print(
+                "ERROR: installed mcp SDK does not expose "
+                "streamable_http_app(). Upgrade with `pip install -U mcp`.",
+                file=sys.stderr,
+            )
+            return 1
+        app = mcp.streamable_http_app()
+        uvicorn.run(app, host=host, port=port)
+        return 0
+
+    # stdio (default)
     if hasattr(mcp, "run"):
         try:
             mcp.run(transport="stdio")

@@ -88,6 +88,54 @@
   passing + one failing case, mocked LLM underneath, `assertLogs` on
   JSONL audit records.
 
+### Phase C — HTTP transport + streaming progress (✅ DONE 2026-08-16)
+- [x] Add a `progress` callback param to `PipelineRunner.run()` so the
+  runner emits a stage event at every major pipeline step
+  (`intent`, `hyde`, `retrieval`, `context`, `serialize`) without
+  depending on the MCP SDK. The runner treats the callback as strictly
+  informational — failures inside it are swallowed and logged, never
+  poisoning the run. (`src/services/pipeline/runner.py`)
+- [x] Wire the MCP `Context.report_progress` / `Context.info` helpers
+  to that callback inside the `retrieve_context` tool wrapper in
+  `src/server.py`. Imported `Context` at module scope from
+  `mcp.server.mcpserver.context` (the pydantic-BaseModel one that the
+  SDK's `find_context_parameter` matches against — NOT the lower-level
+  `mcp.server.context.Context`, which is a different class and would
+  crash tool registration with `PydanticInvalidForJsonSchema`).
+- [x] Add streamable-HTTP transport selection: `STRONGCHAT_MCP_TRANSPORT`
+  env or `--transport {stdio,http}` argv; `--host` / `--port` /
+  `STRONGCHAT_HOST` / `STRONGCHAT_PORT` for the bind address. Defaults
+  to `stdio` / `127.0.0.1:8765`. HTTP mode uses
+  `mcp.run(transport="streamable-http", host=, port=)` (falls back to
+  `streamable_http_app()` + manual `uvicorn.run` on older SDKs).
+- [x] Tests:
+  - `tests/scripts/test_mcp_server.py` extension: progress callback
+    forwarded to runner; transport selection from env/argv; unknown
+    transport falls back to stdio.
+  - `tests/system/test_mcp_server_http.py`: live streamable-HTTP
+    round-trip (initialize → tools/list → tools/call validate_answer)
+    via the official `mcp.client.streamable_http` SDK driving an
+    in-process uvicorn server on an ephemeral port. Plus an offline
+    test asserting the progress callback receives all five stage
+    events in order.
+
+### Phase D — Public exposure via sslip.io + Caddy + bearer auth (NEXT)
+- [ ] Add a Starlette bearer-token middleware in `src/server.py` (gated
+  by `STRONGCHAT_API_KEY` env, hashed with `secrets.compare_digest`).
+  When unset, the middleware passes through (so local/stdio use is
+  unaffected; production deploy must set the env).
+- [ ] Add `deploy/Caddyfile` using sslip.io on-demand TLS so a host
+  reachable at `strongchat.<anything>.sslip.io` gets an automatic cert.
+  Caddy terminates TLS, forwards to `127.0.0.1:8765` plaintext.
+- [ ] Document the deploy + the **claude.ai OAuth caveat**: claude.ai's
+  hosted custom-connector expects OAuth 2.0 PKCE metadata at
+  `/.well-known/oauth-authorization-server`. A static bearer key works
+  for opencode / Claude Desktop / curl but NOT directly for claude.ai
+  web. Provide the minimal OAuth metadata path as a follow-up option.
+- [ ] Tests: extension of `tests/system/test_mcp_server_http.py` with a
+  missing-token (401) and wrong-token (401) case against a server with
+  `STRONGCHAT_API_KEY` set in env.
+
 ## Earlier parity work (pre-MCP, still relevant)
 
 ### Phase 1: Structured Response Framework ✅
@@ -169,6 +217,10 @@
 
 ### Short Term
 - Implement `validate_answer` MCP tool (see Phase B above).
+- Implement the OAuth metadata path (`/.well-known/oauth-authorization-server`
+  + a minimal PKCE flow) so claude.ai's hosted custom-connector can use the
+  public streamable-HTTP endpoint directly, instead of web users having to
+  rely on a static `STRONGCHAT_API_KEY` bearer (Phase D doc).
 - Add an end-to-end OT live test (`tests/system/test_context_retrieval_e2e_ot.py`)
   once an OT ingest is operational on a CI host (the live `test_context_retrieval_e2e.py`
   is currently NT-flavored).

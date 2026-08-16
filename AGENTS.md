@@ -25,10 +25,19 @@ function of its inputs. Nothing server-side persists between calls.
   SDK) stdio server with two tools:
   - `retrieve_context(query, top_k=10, translations=["kjv","web"]) -> dict`
     — runs the existing pipeline (intent → HyDE → retrieval → context),
-    returns a self-contained JSON bundle.
+    returns a self-contained JSON bundle. Emits streaming progress
+    notifications at each major pipeline stage (intent, hyde, retrieval,
+    context, serialize) to the client while the call is in flight.
   - `validate_answer(answer, context=<bundle>) -> dict` — **stub** raises
     `NotImplementedError`; contract locked in for the future agent harness
     / wrapper that drives state management.
+- **Transports:** stdio (default) and streamable-HTTP. Selected by
+  `STRONGCHAT_MCP_TRANSPORT=http` env or `--transport http` argv, bound to
+  `127.0.0.1:8765` by default (`--host` / `--port` /
+  `STRONGCHAT_HOST` / `STRONGCHAT_PORT`). HTTP mode wraps `mw.run(transport="streamable-http", …)`; same SSE response stream carries
+  progress notifications so claude.ai / opencode remote MCP clients
+  surface pipeline stages as the user waits. Local stdio
+  (`claude_desktop_config.json`) still works unchanged.
 - **Assets (read-only data, NOT stripped):** `data/chroma/`
   (verse vectors) and `data/macula_index.db` (Greek/Hebrew tokens +
   lexicon). These survive because they are read-only data assets — not
