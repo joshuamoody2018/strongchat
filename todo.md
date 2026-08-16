@@ -246,6 +246,87 @@ is implementing that provider. Strictly additive — swap
 SDK auto-exposes the OAuth metadata endpoints on the same base URL. The
 bearer guardrails from `src/auth.py` stay unchanged.
 
+#### Pre-conditions + environment facts the agent MUST verify before coding
+These are the things the todo list below assumes but doesn't restate.
+A fresh agent will burn 2-3 exploration steps rediscovering them; read
+this block first.
+
+- **Pin the SDK's abstract method set by introspection, not by this
+  todo.** Run
+  `python -c "import inspect; from mcp.server.auth.provider import OAuthAuthorizationServerProvider as P; print([m for m in dir(P) if not m.startswith('_')])"`.
+  As of mcp 2.0.0 the abstract methods are:
+  `authorize`, `exchange_authorization_code`, `exchange_refresh_token`,
+  `exchange_identity_assertion`, `get_client`, `load_access_token`,
+  `load_authorization_code`, `load_refresh_token`, `register_client`,
+  `revoke_token`.
+  The checklist below implements most of them; `exchange_identity_assertion`
+  and `load_refresh_token` were missing from the first draft of this
+  todo — DON'T skip them, the Protocol requires all abstract methods.
+- **Mirror the `AccessToken` field shape from `src/auth.py`.** A
+  verified token MUST be returned as
+  `mcp.server.auth.provider.AccessToken(token, client_id, scopes,
+  expires_at, resource, subject, claims)` — same 7 fields the static
+  bearer path uses (`StaticBearerTokenVerifier.verify_token` at
+  `src/auth.py:119`). Inspect with
+  `python -c "from mcp.server.auth.provider import AccessToken; print(list(AccessToken.model_fields))"`.
+- **Constructor wiring is additive, not exclusive.** `MCPServer.__init__`
+  accepts `auth_server_provider=`, `token_verifier=`, AND `auth=`
+  simultaneously (separate kwargs, all independent — confirmed by
+  `inspect.signature(MCPServer.__init__)`). You CAN keep the static
+  bearer `token_verifier=` as a secondary admin path while also passing
+  an `auth_server_provider=` for the OAuth flow. The current constructor
+  call lives at `src/server.py:274` inside `_setup_and_build_mcp`:
+  ```python
+  mcp = MCPServer(
+      name="strongchat",
+      description=...,
+      auth=auth_settings,            # from load_static_bearer_config()
+      token_verifier=token_verifier,  # StaticBearerTokenVerifier
+  )
+  ```
+  Add `auth_server_provider=` alongside — do NOT remove `token_verifier=`
+  unless you decide OAuth fully replaces the static bearer path.
+- **The DNS-rebinding `TransportSecuritySettings` in
+  `_build_transport_security` (`src/server.py:432`) already covers the
+  public hostname.** OAuth endpoints (`/.well-known/...`, `/authorize`,
+  `/token`, `/register`, `/revoke`) are mounted on the same Starlette
+  app as `/mcp`, so they route through the same Host header check. No
+  extra allowed_hosts work needed — just confirm by curling
+  `https://<public-host>/.well-known/oauth-authorization-server` after
+  the provider wires up.
+- **There is NO application database.** Auth codes, issued access tokens,
+  refresh tokens, and registered OAuth clients all need storage. Pick
+  ONE of:
+  - **In-memory dicts** (simplest; acceptable for a single-user
+    self-hosted deploy where re-onboarding on restart is fine — the
+    claude.ai web connector just re-runs the consent flow).
+  - **A single sqlite file** at e.g. `data/oauth_state.db` (created
+    on first boot; survives restarts; use short-lived `sqlite3.connect`
+    per call like `ContextRetrievalService` does for macula).
+  - **JSONL append-only log** in `data/oauth_state.jsonl` (auditable but
+    slow to query for token introspection).
+  Document the chosen storage in the `src/oauth/provider.py` module
+  docstring. For v1 single-user, in-memory dicts + a short code/token
+  TTL (e.g. 10 min for codes, 1 h for access tokens, 30 d for refresh
+  tokens) is the recommended minimum.
+- **JWT signing key: generate with `secrets.token_urlsafe(32)`.** Store
+  at `~/.strongchat_oauth_signing_key` (chmod 600, never overwrite on
+  re-run), and load it via env `STRONGCHAT_OAUTH_SIGNING_KEY` so the
+  systemd unit / `.env` can carry it. The bearer key
+  (`~/.strongchat_api_key`) and the OAuth JWT signing key MUST be
+  distinct secrets — never reuse one for the other.
+- **Scopes for a single-user deploy.** Define one scope:
+  `strongchat:retrieve_context` (callers of `retrieve_context`). Map it
+  to a constant in `src/oauth/provider.py`. The metadata endpoint must
+  advertise `scopes_supported=["strongchat:retrieve_context"]` so
+  claude.ai's connector onboarding UI shows the right permission label.
+- **`AGENTS.md` cross-references this section** ("claude.ai web OAuth
+  caveat (lazy follow-up: needs an `OAuthAuthorizationServerProvider`,
+  strictly additive)") but does NOT duplicate the detail. Keep
+  `AGENTS.md` short and pointed; this section is the canonical spec.
+  When the OAuth provider ships, update `AGENTS.md:Phase D` to ✅ and
+  add a "Public OAuth exposure" subsection, but defer until then.
+
 - [ ] Implement `src/oauth/provider.py` with an
   `OAuthAuthorizationServerProvider` subclass that wires:
   - [ ] `get_authorization_server_metadata()` → serves
@@ -272,14 +353,13 @@ bearer guardrails from `src/auth.py` stay unchanged.
     refresh_token)` → token introspection + refresh flow. Optional
     for v1; required if we want token rotation without re-onboarding.
   - [ ] `revoke_token(...)` → the `/revoke` endpoint (RFC 7009).
-- [ ] Wire `auth_server_provider=` (instead of `token_verifier=`) into
-  `MCPServer(...)` in `src/server.py:_setup_and_build_mcp`. The SDK
-  auto-mounts the OAuth endpoints + serves
-  `/.well-known/oauth-authorization-server`. The static-bearer
-  `StaticBearerTokenVerifier` can stay as a secondary token verifier
-  if we want both paths (admin/static + OAuth-issued) — confirm with
-  the SDK's `auth=` + `token_verifier=` + `auth_server_provider=`
-  interaction; may need to compose.
+- [ ] Wire `auth_server_provider=` into `MCPServer(...)` in
+  `src/server.py:_setup_and_build_mcp`. The SDK auto-mounts the OAuth
+  endpoints + serves `/.well-known/oauth-authorization-server`. The
+  static-bearer `StaticBearerTokenVerifier` can stay alongside as a
+  secondary token verifier — see the "Pre-conditions" block above:
+  `auth=`, `token_verifier=`, and `auth_server_provider=` are
+  INDEPENDENT constructor kwargs and compose freely.
 - [ ] Add a per-deploy JWT signing key (random 256-bit secret) stored
   alongside `~/.strongchat_api_key` (e.g.
   `~/.strongchat_oauth_signing_key`, chmod 600). `deploy/bootstrap.sh`
