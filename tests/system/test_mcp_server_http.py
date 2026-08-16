@@ -266,7 +266,7 @@ def _patch_get_runner(runner):
 # Bearer-token authentication integration tests
 # --------------------------------------------------------------------------- #
 #
-# When ``OPENROUTER_STRONGCHAT_DEFAULT_API_KEY`` + ``STRONGCHAT_PUBLIC_URL`` are set in env
+# When ``STRONGCHAT_API_KEY`` + ``STRONGCHAT_PUBLIC_URL`` are set in env
 # at server boot, the MCP SDK's ``BearerAuthBackend`` middleware is
 # auto-wired: every request to ``/mcp`` MUST carry ``Authorization:
 # Bearer <key>``. Anything else gets a ``401 Unauthorized`` before the
@@ -294,7 +294,7 @@ class TestMcpServerBearerAuth(unittest.TestCase):
 
     def setUp(self):
         # Make sure no leftover auth env from other tests pollutes us.
-        for k in ("OPENROUTER_STRONGCHAT_DEFAULT_API_KEY", "STRONGCHAT_PUBLIC_URL"):
+        for k in ("STRONGCHAT_API_KEY", "STRONGCHAT_PUBLIC_URL"):
             os.environ.pop(k, None)
 
     def test_bearer_auth_rejects_unauthenticated_requests(self):
@@ -304,7 +304,7 @@ class TestMcpServerBearerAuth(unittest.TestCase):
         import httpx2
 
         port = _pick_ephemeral_port()
-        os.environ["OPENROUTER_STRONGCHAT_DEFAULT_API_KEY"] = _TEST_API_KEY
+        os.environ["STRONGCHAT_API_KEY"] = _TEST_API_KEY
         os.environ["STRONGCHAT_PUBLIC_URL"] = f"http://strongchat.test:{port}"
         try:
             async with _running_http_server("127.0.0.1", port) as url:
@@ -370,17 +370,17 @@ class TestMcpServerBearerAuth(unittest.TestCase):
                     self.assertIn("protocolVersion", r.text)
                     print(" bearer-auth: 401 / 401x5 / 200 sequence PASS")
         finally:
-            os.environ.pop("OPENROUTER_STRONGCHAT_DEFAULT_API_KEY", None)
+            os.environ.pop("STRONGCHAT_API_KEY", None)
             os.environ.pop("STRONGCHAT_PUBLIC_URL", None)
 
 
 class TestMcpServerNoAuthWhenUnset(unittest.TestCase):
-    """Without ``OPENROUTER_STRONGCHAT_DEFAULT_API_KEY``, the server stays unauthenticated
+    """Without ``STRONGCHAT_API_KEY``, the server stays unauthenticated
     (the default stdio / local dev path must not be silently locked
     behind an unset token)."""
 
     def setUp(self):
-        for k in ("OPENROUTER_STRONGCHAT_DEFAULT_API_KEY", "STRONGCHAT_PUBLIC_URL"):
+        for k in ("STRONGCHAT_API_KEY", "STRONGCHAT_PUBLIC_URL"):
             os.environ.pop(k, None)
 
     def test_unauthenticated_request_succeeds_when_no_key(self):

@@ -123,11 +123,11 @@
 - [x] Add `src/auth.py` exposing `StaticBearerTokenVerifier` (an
   `mcp.server.auth.provider.TokenVerifier` implementation that constant-time
   compares the `Authorization: Bearer <key>` value against
-  `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY`) plus `load_static_bearer_config()` which returns
+  `STRONGCHAT_API_KEY`) plus `load_static_bearer_config()` which returns
   `(AuthSettings, token_verifier)` for `MCPServer.__init__` from env.
 - [x] Wire `auth_settings` + `token_verifier` into `MCPServer(...)` inside
   `_setup_and_build_mcp` in `src/server.py`. Both env controls
-  (`OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` + `STRONGCHAT_PUBLIC_URL`) set → SDK auto-wires
+  (`STRONGCHAT_API_KEY` + `STRONGCHAT_PUBLIC_URL`) set → SDK auto-wires
   `BearerAuthBackend` + `AuthContextMiddleware` + serves
   `/.well-known/oauth-protected-resource`. Only one set — log WARNING +
   disable auth so misconfiguration is LOUD but never silently leaves a
@@ -143,13 +143,13 @@
   custom-connector caveat (below) + production-hardening options.
 - [x] Tests `tests/system/test_mcp_server_http.py` extension: 401 on
   missing/malformed/wrong bearer; 200 on correct bearer; 200 on
-  unauthenticated path when `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` unset (backwards
+  unauthenticated path when `STRONGCHAT_API_KEY` unset (backwards
   compatible — stdio / local HTTP / ACL'd exposure stays open).
 - [x] `deploy/bootstrap.sh` — idempotent scripted bring-up: generates +
-  stores API key at `~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` (chmod 600, never overwrites
+  stores API key at `~/.strongchat_api_key` (chmod 600, never overwrites
   existing), auto-detects public IPv4 (or accepts `PUBLIC_IP=` /
   `STRONGCHAT_HOSTNAME=` overrides), renders `deploy/Caddyfile.local`
-  from the template, writes `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` + `STRONGCHAT_PUBLIC_URL`
+  from the template, writes `STRONGCHAT_API_KEY` + `STRONGCHAT_PUBLIC_URL`
   into `.env` (no duplicates on re-run), prints the exact next-step
   commands. Safe to re-run; key is preserved across re-runs.
 - [x] `deploy/strongchat.service` — optional systemd unit so the MCP
@@ -177,8 +177,8 @@ are coded yet on a fresh box.
   this box's LAN IP in the router's port-forwarding config. (Cloud VMs
   usually have a routable public IP already; skip this.)
 - [ ] Run `./deploy/bootstrap.sh` from the repo root. It writes:
-  - `~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` (chmod 600) — the bearer secret.
-  - `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` + `STRONGCHAT_PUBLIC_URL` lines in `.env`.
+  - `~/.strongchat_api_key` (chmod 600) — the bearer secret.
+  - `STRONGCHAT_API_KEY` + `STRONGCHAT_PUBLIC_URL` lines in `.env`.
   - `deploy/Caddyfile.local` (rendered; gitignored).
   Re-read its printed output — it tells you the exact public URL.
 - [ ] (Optional but recommended) Install the systemd unit so the MCP
@@ -203,7 +203,7 @@ are coded yet on a fresh box.
   public path works end-to-end:
   ```sh
   curl -s -X POST \
-    -H "Authorization: Bearer $(ssh host-box cat ~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY)" \
+    -H "Authorization: Bearer $(ssh host-box cat ~/.strongchat_api_key)" \
     -H "Content-Type: application/json" \
     -H "Accept: application/json, text/event-stream" \
     -d '{"jsonrpc":"2.0","id":1,"method":"initialize",
@@ -220,12 +220,12 @@ are coded yet on a fresh box.
     "mcpServers": {
       "strongchat-remote": {
         "url": "https://strongchat.YOURIP.sslip.io/mcp",
-        "headers": { "Authorization": "Bearer <paste `cat ~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY`>" }
+        "headers": { "Authorization": "Bearer <paste `cat ~/.strongchat_api_key`>" }
       }
     }
   }
   ```
-- [ ] (Rotation) To rotate the API key later: `rm ~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY`,
+- [ ] (Rotation) To rotate the API key later: `rm ~/.strongchat_api_key`,
   remove the two `STRONGCHAT_*` lines from `.env`, rerun
   `./deploy/bootstrap.sh`, restart the MCP server, and update any
   client configs that had the old key.
@@ -281,7 +281,7 @@ bearer guardrails from `src/auth.py` stay unchanged.
   the SDK's `auth=` + `token_verifier=` + `auth_server_provider=`
   interaction; may need to compose.
 - [ ] Add a per-deploy JWT signing key (random 256-bit secret) stored
-  alongside `~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` (e.g.
+  alongside `~/.strongchat_api_key` (e.g.
   `~/.strongchat_oauth_signing_key`, chmod 600). `deploy/bootstrap.sh`
   generates it if missing.
 - [ ] Tests:
@@ -382,7 +382,7 @@ bearer guardrails from `src/auth.py` stay unchanged.
 - Implement the OAuth metadata path (`/.well-known/oauth-authorization-server`
   + a minimal PKCE flow) so claude.ai's hosted custom-connector can use the
   public streamable-HTTP endpoint directly, instead of web users having to
-  rely on a static `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` bearer (Phase D doc).
+  rely on a static `STRONGCHAT_API_KEY` bearer (Phase D doc).
 - Add an end-to-end OT live test (`tests/system/test_context_retrieval_e2e_ot.py`)
   once an OT ingest is operational on a CI host (the live `test_context_retrieval_e2e.py`
   is currently NT-flavored).

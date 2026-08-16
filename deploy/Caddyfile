@@ -8,7 +8,7 @@
 # static cert files to manage.
 #
 # Authentication: the bearer token check is enforced IN the MCP server
-# (see ``src/auth.py``, gated by ``OPENROUTER_STRONGCHAT_DEFAULT_API_KEY`` +
+# (see ``src/auth.py``, gated by ``STRONGCHAT_API_KEY`` +
 # ``STRONGCHAT_PUBLIC_URL``). Caddy does NOT add its own auth layer — it's
 # purely TLS termination + reverse proxy here. That keeps a single
 # source of truth for the bearer key (the MCP server) so local stdio /
@@ -21,7 +21,7 @@
 #        STRONGCHAT_MCP_TRANSPORT=http \
 #        STRONGCHAT_HOST=127.0.0.1 \
 #        STRONGCHAT_PORT=8765 \
-#        OPENROUTER_STRONGCHAT_DEFAULT_API_KEY=$(cat ~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY) \
+#        STRONGCHAT_API_KEY=$(cat ~/.strongchat_api_key) \
 #        STRONGCHAT_PUBLIC_URL=https://strongchat.YOURHOST.sslip.io \
 #        .venv/bin/python src/server.py
 #
@@ -71,7 +71,7 @@ strongchat.YOURHOST.sslip.io {
 	}
 
 	# Forward everything to the local MCP server. The bearer key sits
-	# in ``OPENROUTER_STRONGCHAT_DEFAULT_API_KEY`` env on the backend; we pass the
+	# in ``STRONGCHAT_API_KEY`` env on the backend; we pass the
 	# ``Authorization`` header through unchanged. Set explicit Host so
 	# the MCP server's OAuth ``resource_server_url`` check still
 	# reflects the public URL (set STRONGCHAT_PUBLIC_URL to match).
