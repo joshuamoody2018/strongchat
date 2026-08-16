@@ -4,6 +4,10 @@
 # downloads and ingests the Macula Greek + Hebrew
 # corpora + STEPBible TBESG/LSJ/TBESH lexicons. There is NO application
 # database; the audit trail is the JSONL log under data/logs/.
+#
+# Optionally installs Caddy (for the public-exposure path in deploy/) on
+# Debian/Ubuntu via the official Cloudsmith stable repo. Skip with
+# SKIP_CADDY=1 if you don't need public exposure on this box.
 
 set -euo pipefail
 
@@ -122,9 +126,54 @@ else
   log "ChromaDB already populated at data/chroma/chroma.sqlite3; skipping ingest."
 fi
 
+# ---------------------------------------------------------------------------
+# Optional: install Caddy for the public-exposure path (deploy/).
+# Only runs on Debian/Ubuntu (the official Cloudsmith stable repo covers
+# those). Skip with SKIP_CADDY=1. Non-fatal: a failure here doesn't undo
+# the dev environment above, so local-only dev still works.
+# ---------------------------------------------------------------------------
+install_caddy() {
+    if [ "${SKIP_CADDY:-0}" = "1" ]; then
+        log "SKIP_CADDY=1 set; skipping Caddy install."
+        return 0
+    fi
+    if command -v caddy >/dev/null 2>&1; then
+        log "Caddy already installed at $(command -v caddy); skipping."
+        return 0
+    fi
+    if ! command -v apt-get >/dev/null 2>&1; then
+        log "Caddy install skipped (no apt-get; this isn't Debian/Ubuntu)."
+        log "  Install Caddy manually for your platform:"
+        log "  https://caddyserver.com/docs/install"
+        return 0
+    fi
+    log "Installing Caddy via the official Cloudsmith stable repo (Debian/Ubuntu)..."
+    # Privilege helper: use sudo when not root, else run directly.
+    if command -v sudo >/dev/null 2>&1 && [ "$(id -u)" -ne 0 ]; then
+        SUDO="sudo"
+    else
+        SUDO=""
+    fi
+    # The Cloudsmith repo setup needs the keyring + apt-transport-https
+    # prerequisites. curl is already in APT_PACKAGES above, but be
+    # defensive in case this block runs on a box where the top of the
+    # script short-circuited the apt install.
+    $SUDO apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl 2>/dev/null || true
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+        | $SUDO gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+        | $SUDO tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
+    $SUDO apt-get update -qq
+    $SUDO apt-get install -y caddy
+    log "Caddy installed: $(command -v caddy 2>/dev/null || echo 'path?')"
+}
+
+install_caddy || log "Caddy install failed (non-fatal); see deploy/README.md for manual steps."
+
 log "Environment setup complete."
 log "Macula Hebrew + Greek data ingested, ChromaDB populated."
 log "No application database is required — audit trail is JSONL at data/logs/strongchat.log"
 log "Run the MCP server with: $VENV_DIR/bin/python src/server.py"
 log "Run the CLI smoke-test with: $VENV_DIR/bin/python src/main.py \"<query>\""
 log "Activate the virtual environment with: source $VENV_DIR/bin/activate"
+log "For public exposure (sslip.io + Caddy + bearer auth), run: ./deploy/bootstrap.sh"
