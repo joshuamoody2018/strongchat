@@ -121,6 +121,40 @@ class TestJsonFormatter(unittest.TestCase):
         self.assertIn("RuntimeError", payload["exc"])
         self.assertIn("boom", payload["exc"])
 
+    def test_error_record_carries_error_field(self):
+        """At ERROR level, the audit record carries the `error` field verbatim.
+
+        Mirrors what LLMWrapper / EmbeddingService / PipelineRunner emit on
+        a failure: ERROR `llm_call` record with `status='error'` and a
+        non-empty `error` string. Previously the ERROR level was only
+        tested via the default-level check; this asserts the actual record
+        shape fires through the formatter correctly.
+        """
+        fmt = sc_logging.JsonFormatter()
+        record = _make_record(
+            msg="llm_call",
+            level=logging.ERROR,
+            extra={
+                "event": "llm_call",
+                "correlation_id": "c-err",
+                "slug": "intent_generation",
+                "attempts": 4,
+                "elapsed_ms": 900,
+                "status": "error",
+                "error": "API call failed after 3 attempts: connection reset",
+            },
+        )
+        payload = json.loads(fmt.format(record))
+        self.assertEqual(payload["level"], "ERROR")
+        self.assertEqual(payload["event"], "llm_call")
+        self.assertEqual(payload["correlation_id"], "c-err")
+        self.assertEqual(payload["attempts"], 4)
+        self.assertEqual(payload["status"], "error")
+        self.assertIn("error", payload)
+        self.assertIn("connection reset", payload["error"])
+        # Timestamp is still present on ERROR records.
+        self.assertTrue(payload["ts"].endswith("Z"))
+
 
 class TestConfigureLogging(unittest.TestCase):
     """Tests for configure_logging level resolution + idempotency."""
@@ -183,6 +217,52 @@ class TestConfigureLogging(unittest.TestCase):
         # The root default is exactly "strongchat".
         root = sc_logging.get_logger()
         self.assertEqual(root.name, "strongchat")
+
+    def test_error_record_lands_on_disk_via_real_logger(self):
+        """An ERROR emitted through a real logger lands as JSON on disk.
+
+        Drives the actual configure_logging -> ConcurrentRotatingFileHandler
+        -> file path so we exercise cross-process-safe writes end-to-end.
+        (Cannot use assertLogs here - it REPLACES the logger's handlers with
+        its own capture handler and would hide the file-write side effect we
+        need to verify; the ERROR formatter-shape test above covers the format
+        side via JsonFormatter.format directly.)
+        """
+        sc_logging.configure_logging(level="ERROR", log_file=self.log_file)
+        logger = sc_logging.get_logger("strongchat.test")
+        logger.error(
+            "llm_call",
+            extra={
+                "event": "llm_call",
+                "correlation_id": "c-live-err",
+                "slug": "intent_generation",
+                "status": "error",
+                "error": "live failure",
+            },
+        )
+        # Close file-ish handlers so the lazy-open + fcntl lock path flushes
+        # the record to disk before we read it back.
+        for h in logging.getLogger("strongchat").handlers:
+            if hasattr(h, "baseFilename"):
+                try:
+                    h.flush()
+                    h.close()
+                except Exception:
+                    pass
+
+        self.assertTrue(
+            os.path.exists(self.log_file),
+            "ERROR log file was not created - handler did not write",
+        )
+        with open(self.log_file, "r", encoding="utf-8") as fh:
+            lines = [ln for ln in fh.read().splitlines() if ln.strip()]
+        self.assertEqual(len(lines), 1)
+        payload = json.loads(lines[0])
+        self.assertEqual(payload["level"], "ERROR")
+        self.assertEqual(payload["event"], "llm_call")
+        self.assertEqual(payload["correlation_id"], "c-live-err")
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload["error"], "live failure")
 
 
 if __name__ == "__main__":

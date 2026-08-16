@@ -168,8 +168,14 @@ async def validate_answer_impl(answer: str, context: dict) -> dict:
     )
 
 
-async def _main() -> int:
-    """Run the MCP stdio server. Never returns under normal operation."""
+async def _setup_and_build_mcp():
+    """Load env, configure logging, register tools; return the MCPServer.
+
+    Returns the configured MCPServer (or FastMCP on v1.x) instance with both
+    tools already registered. The caller then runs the stdio loop on it.
+    Pulled out of _main so it doesn't need to be async-then-sync-then-async
+    again.
+    """
     # Load .env so OPENROUTER_API_KEY etc. are available; preserve an
     # explicitly-unset key in the parent shell (matches src/main.py behaviour).
     had_api_key = "OPENROUTER_API_KEY" in os.environ
@@ -180,15 +186,26 @@ async def _main() -> int:
     configure_logging()
 
     try:
-        from mcp.server.fastmcp import FastMCP
-    except ImportError as exc:
-        print(
-            f"ERROR: mcp package not installed. Run `pip install -r requirements.txt`. ({exc})",
-            file=sys.stderr,
-        )
-        return 1
+        from mcp.server.mcpserver import MCPServer
+    except ImportError:
+        try:
+            from mcp.server.fastmcp import FastMCP as MCPServer
+        except ImportError as exc:
+            print(
+                f"ERROR: mcp package not installed or unsupported version. "
+                f"Run `pip install -r requirements.txt`. ({exc})",
+                file=sys.stderr,
+            )
+            raise
 
-    mcp = FastMCP("strongchat")
+    mcp = MCPServer(name="strongchat", description=(
+        "StrongChat retrieve_context + validate_answer MCP server. "
+        "retrieve_context runs the intent -> HyDE -> retrieval -> "
+        "original-language context pipeline and returns a self-contained "
+        "JSON bundle. validate_answer is a stub today (raises "
+        "NotImplementedError); its contract is locked in for the future "
+        "agent harness / wrapper that drives state management."
+    ))
 
     @mcp.tool(
         name="retrieve_context",
@@ -205,7 +222,9 @@ async def _main() -> int:
         top_k: int = 10,
         translations: list[str] | None = None,
     ) -> dict:
-        return await retrieve_context_impl(query, top_k=top_k, translations=translations)
+        return await retrieve_context_impl(
+            query, top_k=top_k, translations=translations
+        )
 
     @mcp.tool(
         name="validate_answer",
@@ -219,16 +238,35 @@ async def _main() -> int:
     async def validate_answer(answer: str, context: dict) -> dict:
         return await validate_answer_impl(answer=answer, context=context)
 
-    # mcp.run() owns the stdio loop and never returns under normal operation.
-    await mcp.run_stdio_async() if hasattr(mcp, "run_stdio_async") else mcp.run()
-    return 0
+    return mcp
 
 
 def main() -> int:
+    """Run the MCP stdio server. Never returns under normal operation."""
     try:
-        return asyncio.run(_main())
-    except KeyboardInterrupt:
+        mcp = asyncio.run(_setup_and_build_mcp())
+    except ImportError:
+        return 1
+
+    # MCPServer.run() is the synchronous entry on v2.x: it wraps anyio.run
+    # internally and owns the event loop for the lifetime of the server.
+    # On v1.x FastMCP, run() also works (defaults to stdio). Either way
+    # this call owns the loop and we must NOT be inside asyncio.run when
+    # we call it.
+    if hasattr(mcp, "run"):
+        try:
+            mcp.run(transport="stdio")
+        except TypeError:
+            # Older v1.x signature: run() takes no transport arg.
+            mcp.run()
         return 0
+    # Last-resort fallback: an SDK with only the async entry exposed.
+    if hasattr(mcp, "run_stdio_async"):
+        asyncio.run(mcp.run_stdio_async())
+        return 0
+    print("ERROR: MCPServer exposes neither run() nor run_stdio_async()",
+          file=sys.stderr)
+    return 1
 
 
 if __name__ == "__main__":
