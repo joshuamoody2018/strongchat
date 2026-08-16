@@ -46,7 +46,7 @@ environment variable (or ``--transport <stdio|http>`` argv override):
 
 For public exposure wrap this with the included ``deploy/Caddyfile`` (which
 terminates TLS via sslip.io on-demand certs and forwards a bearer API key
-configured via ``STRONGCHAT_API_KEY``).
+configured via ``OPENROUTER_STRONGCHAT_DEFAULT_API_KEY``).
 """
 
 import argparse
@@ -219,16 +219,26 @@ async def _setup_and_build_mcp():
     Pulled out of _main so it doesn't need to be async-then-sync-then-async
     again.
     """
-    # Load .env so OPENROUTER_STRONGCHAT_DEFAULT_API_KEY etc. are available; preserve an
-    # explicitly-unset key in the parent shell (matches src/main.py behaviour).
-    had_api_key = "OPENROUTER_STRONGCHAT_DEFAULT_API_KEY" in os.environ
+    # Load .env so OPENROUTER_STRONGCHAT_DEFAULT_API_KEY etc. are
+    # available; preserve explicitly-unset keys in the parent shell
+    # (matches src/main.py behaviour). Critical for tests: setUp() pops
+    # these from os.environ to exercise the unset-key code path, and
+    # load_dotenv() would silently re-inject them from .env, breaking
+    # test isolation on any box that has a real .env (e.g. post-bootstrap).
+    _preserve_unset = (
+        "OPENROUTER_STRONGCHAT_DEFAULT_API_KEY",
+        "OPENROUTER_STRONGCHAT_DEFAULT_API_KEY",
+        "STRONGCHAT_PUBLIC_URL",
+    )
+    _was_set = {k: k in os.environ for k in _preserve_unset}
     load_dotenv()
-    if not had_api_key and "OPENROUTER_STRONGCHAT_DEFAULT_API_KEY" in os.environ:
-        del os.environ["OPENROUTER_STRONGCHAT_DEFAULT_API_KEY"]
+    for k in _preserve_unset:
+        if not _was_set[k] and k in os.environ:
+            del os.environ[k]
 
     configure_logging()
 
-    # Auth: if STRONGCHAT_API_KEY + STRONGCHAT_PUBLIC_URL are both set in
+    # Auth: if OPENROUTER_STRONGCHAT_DEFAULT_API_KEY + STRONGCHAT_PUBLIC_URL are both set in
     # env, wire the MCP SDK's bearer-token verifier into the server. The
     # public endpoint will return 401 to any request missing a matching
     # ``Authorization: Bearer <key>`` header. When both env vars are

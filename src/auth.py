@@ -11,7 +11,7 @@ implementation.
 
 Enabled by setting two env vars at server start:
 
-* ``STRONGCHAT_API_KEY`` — the shared secret. When unset, the MCP server
+* ``OPENROUTER_STRONGCHAT_DEFAULT_API_KEY`` — the shared secret. When unset, the MCP server
   runs unauthenticated (correct for local stdio, local-only HTTP, or a
   network ACL'd HTTP exposure).
 * ``STRONGCHAT_PUBLIC_URL`` — the public canonical base URL the server is
@@ -96,7 +96,7 @@ def _check_auth_module() -> bool:
 
 class StaticBearerTokenVerifier:  # implements mcp.server.auth.provider.TokenVerifier
     """Verify ``Authorization: Bearer <key>`` against the
-    ``STRONGCHAT_API_KEY`` env value.
+    ``OPENROUTER_STRONGCHAT_DEFAULT_API_KEY`` env value.
 
     Constant-time comparison (``hmac.compare_digest``) so brute-force
     timing-leak attacks don't harvest the key. Returns an
@@ -111,7 +111,7 @@ class StaticBearerTokenVerifier:  # implements mcp.server.auth.provider.TokenVer
 
     def __init__(self, expected_key: str):
         if not expected_key:
-            raise ValueError("STRONGCHAT_API_KEY must not be empty")
+            raise ValueError("OPENROUTER_STRONGCHAT_DEFAULT_API_KEY must not be empty")
         # ``hmac.compare_digest`` requires equal-length bytes for some
         # implementations; pre-encode our expected key once.
         self._expected = expected_key.encode("utf-8")
@@ -144,7 +144,7 @@ class StaticBearerTokenVerifier:  # implements mcp.server.auth.provider.TokenVer
 def load_static_bearer_config() -> Tuple[Optional[object], Optional[object]]:
     """Return ``(auth_settings, token_verifier)`` for ``MCPServer.__init__``.
 
-    Both elements are ``None`` when either ``STRONGCHAT_API_KEY`` or
+    Both elements are ``None`` when either ``OPENROUTER_STRONGCHAT_DEFAULT_API_KEY`` or
     ``STRONGCHAT_PUBLIC_URL`` is unset (auth is disabled — correct for
     stdio / local-only HTTP / ACL'd network exposure).
 
@@ -155,7 +155,7 @@ def load_static_bearer_config() -> Tuple[Optional[object], Optional[object]]:
     if not _check_auth_module():
         return None, None
 
-    api_key = os.environ.get("STRONGCHAT_API_KEY", "").strip()
+    api_key = os.environ.get("OPENROUTER_STRONGCHAT_DEFAULT_API_KEY", "").strip()
     public_url = os.environ.get("STRONGCHAT_PUBLIC_URL", "").strip()
 
     if not api_key and not public_url:
@@ -164,7 +164,7 @@ def load_static_bearer_config() -> Tuple[Optional[object], Optional[object]]:
 
     if not api_key or not public_url:
         logger.warning(
-            "STRONGCHAT_API_KEY (set=%s) / STRONGCHAT_PUBLIC_URL (set=%s) "
+            "OPENROUTER_STRONGCHAT_DEFAULT_API_KEY (set=%s) / STRONGCHAT_PUBLIC_URL (set=%s) "
             "mismatch — disabling bearer auth. Fix the missing var (or "
             "unset both) to silence this warning.",
             bool(api_key), bool(public_url),

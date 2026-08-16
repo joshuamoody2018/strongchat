@@ -8,7 +8,7 @@
 # What it does (idempotent — safe to re-run):
 #
 #   1. Generates a 32-byte URL-safe API key and stores it at
-#      ~/.strongchat_api_key (chmod 600). If the file already exists it
+#      ~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY (chmod 600). If the file already exists it
 #      is left alone so existing clients keep working.
 #   2. Detects this box's public IPv4 (via a public echo service) so we
 #      can build the sslip.io hostname
@@ -16,7 +16,7 @@
 #   3. Substitutes that hostname into a rendered deploy/Caddyfile.local
 #      (leaving the versioned template deploy/Caddyfile untouched).
 #   4. Appends two lines to .env (only if they're not already there):
-#        STRONGCHAT_API_KEY=<the key>
+#        OPENROUTER_STRONGCHAT_DEFAULT_API_KEY=<the key>
 #        STRONGCHAT_PUBLIC_URL=https://strongchat.<A.B.C.D>.sslip.io
 #      The MCP server auto-picks them up on next boot via load_dotenv().
 #   5. Checks whether Caddy and uvicorn are installed and prints clear
@@ -33,12 +33,12 @@
 #
 # Where the secrets live after a successful run:
 #
-#   ~/.strongchat_api_key           the API key (chmod 600). Cat this to
+#   ~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY           the API key (chmod 600). Cat this to
 #                                   paste into opencode / Claude Desktop
-#                                   config: `cat ~/.strongchat_api_key`
+#                                   config: `cat ~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY`
 #   .env                           Loaded by src/server.py at boot via
 #                                   python-dotenv. Contains
-#                                   STRONGCHAT_API_KEY +
+#                                   OPENROUTER_STRONGCHAT_DEFAULT_API_KEY +
 #                                   STRONGCHAT_PUBLIC_URL next to your
 #                                   existing OPENROUTER_STRONGCHAT_DEFAULT_API_KEY etc.
 #                                   (.env is gitignored, never committed.)
@@ -62,7 +62,7 @@ err()  { echo "[bootstrap] ERROR: $*" >&2; }
 # ---------------------------------------------------------------------------
 # 1. API key — never overwrite an existing one; clients may be using it.
 # ---------------------------------------------------------------------------
-KEY_FILE="${STRONGCHAT_KEY_FILE:-$HOME/.strongchat_api_key}"
+KEY_FILE="${STRONGCHAT_KEY_FILE:-$HOME/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY}"
 
 if [[ -f "$KEY_FILE" ]]; then
   log "API key already present at $KEY_FILE (mode $(stat -c '%a' "$KEY_FILE" 2>/dev/null || stat -f '%A' "$KEY_FILE"))"
@@ -190,7 +190,7 @@ PY
   fi
 }
 
-ensure_env_line "STRONGCHAT_API_KEY"    "$API_KEY"
+ensure_env_line "OPENROUTER_STRONGCHAT_DEFAULT_API_KEY"    "$API_KEY"
 ensure_env_line "STRONGCHAT_PUBLIC_URL" "$PUBLIC_URL"
 log "env vars present in $ENV_FILE (loaded by src/server.py at boot)"
 
@@ -214,12 +214,12 @@ cat <<EOF
 === bootstrap complete ===
 
 Where the secret lives:
-  ~/.strongchat_api_key            (chmod 600; cat it to paste into clients)
-  .env                             STRONGCHAT_API_KEY + STRONGCHAT_PUBLIC_URL
+  ~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY            (chmod 600; cat it to paste into clients)
+  .env                             OPENROUTER_STRONGCHAT_DEFAULT_API_KEY + STRONGCHAT_PUBLIC_URL
                                    loaded automatically by src/server.py
 
 To paste the API key into opencode / Claude Desktop config:
-  cat ~/.strongchat_api_key
+  cat ~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY
 
 NEXT STEPS — do these by hand so you can watch the logs:
 
@@ -248,7 +248,7 @@ NEXT STEPS — do these by hand so you can watch the logs:
 
   4) Smoke-test from your laptop (replace the bearer with your key):
         curl -s -X POST \\
-          -H "Authorization: Bearer \$(cat ~/.strongchat_api_key)" \\
+          -H "Authorization: Bearer \$(cat ~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY)" \\
           -H "Content-Type: application/json" \\
           -H "Accept: application/json, text/event-stream" \\
           -d '{"jsonrpc":"2.0","id":1,"method":"initialize",
@@ -268,6 +268,6 @@ NEXT STEPS — do these by hand so you can watch the logs:
           }
         }
 
-rotate the API key later by deleting ~/.strongchat_api_key, removing
+rotate the API key later by deleting ~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY, removing
 the two STRONGCHAT_* lines from .env, and rerunning ./deploy/bootstrap.sh.
 EOF

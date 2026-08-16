@@ -45,7 +45,7 @@ function of its inputs. Nothing server-side persists between calls.
   `TokenVerifier` + `AuthSettings`; SDK auto-wires `BearerAuthBackend`
   + `AuthContextMiddleware` + serves
   `/.well-known/oauth-protected-resource`). Enabled by setting both
-  `STRONGCHAT_API_KEY` + `STRONGCHAT_PUBLIC_URL` env at server boot.
+  `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` + `STRONGCHAT_PUBLIC_URL` env at server boot.
   Caddy is pure TLS + reverse proxy — single source of truth for the
   shared key. See `deploy/README.md` for the claude.ai web OAuth
   custom-connector caveat (lazy follow-up: needs an
@@ -106,7 +106,7 @@ contract).
 * `src/auth.py` - `StaticBearerTokenVerifier` (implements
   `mcp.server.auth.provider.TokenVerifier`) + `load_static_bearer_config()`;
   constant-time compare, SDK auto-wires `BearerAuthBackend` +
-  `AuthContextMiddleware` when `STRONGCHAT_API_KEY` +
+  `AuthContextMiddleware` when `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` +
   `STRONGCHAT_PUBLIC_URL` env are both set.
 * `src/main.py` - JSON-printing CLI smoke-test (calls `retrieve_context_impl`)
 * `src/services/llm/` - LLM framework (wrapper, aimessage, exceptions)

@@ -4,7 +4,7 @@
 # (running separately, typically as the distro-packaged `caddy.service`)
 # is the only public surface. Env vars come from the repo's .env file
 # via EnvironmentFile=, which means anything `deploy/bootstrap.sh`
-# wrote there (STRONGCHAT_API_KEY, STRONGCHAT_PUBLIC_URL) is picked up
+# wrote there (OPENROUTER_STRONGCHAT_DEFAULT_API_KEY, STRONGCHAT_PUBLIC_URL) is picked up
 # automatically.
 #
 # INSTALL
@@ -54,7 +54,7 @@ LimitNOFILE=4096
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
-ProtectHome=false  # needs ~/.strongchat_api_key if you keep it there
+ProtectHome=false  # needs ~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY if you keep it there
 ReadWritePaths=/opt/strongchat/data/logs
 ProtectKernelTunables=true
 ProtectKernelModules=true

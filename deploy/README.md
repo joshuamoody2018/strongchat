@@ -9,7 +9,7 @@ truth for the shared key.
 > **Status today:** the server defaults to **stdio** and binds to
 > **`127.0.0.1:8765`** in HTTP mode. Nothing is exposed to the internet
 > until you (a) run `deploy/bootstrap.sh`, (b) start the MCP server in
-> HTTP mode, AND (c) start Caddy. With no `STRONGCHAT_API_KEY` /
+> HTTP mode, AND (c) start Caddy. With no `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` /
 > `STRONGCHAT_PUBLIC_URL` in your `.env` (the default), the bearer
 > middleware is **disabled** — but so is any public surface, because
 > Caddy isn't running and the backend is loopback-only.
@@ -18,7 +18,7 @@ truth for the shared key.
 
 `deploy/bootstrap.sh` is idempotent and safe to re-run. It:
 
-1. Generates a 32-byte URL-safe API key at `~/.strongchat_api_key`
+1. Generates a 32-byte URL-safe API key at `~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY`
    (chmod 600) — **never overwrites** an existing one, so clients
    you've already configured keep working across re-runs.
 2. Auto-detects this box's public IPv4 (or accepts `PUBLIC_IP=...` /
@@ -26,7 +26,7 @@ truth for the shared key.
    hostname `https://strongchat.<A.B.C.D>.sslip.io`.
 3. Renders `deploy/Caddyfile.local` from the template (the template
    stays untouched; `Caddyfile.local` is gitignored).
-4. Appends / updates `STRONGCHAT_API_KEY` + `STRONGCHAT_PUBLIC_URL` in
+4. Appends / updates `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` + `STRONGCHAT_PUBLIC_URL` in
    `.env` (loaded automatically by `src/server.py` at boot via
    `python-dotenv`; `.env` is gitignored, never committed).
 5. Prints the exact next-step commands (start MCP server, start Caddy,
@@ -47,16 +47,16 @@ the claude.ai web OAuth caveat + production hardening is below.
 
 | Location | What | How to read it |
 |---|---|---|
-| `~/.strongchat_api_key` | the bearer API key (chmod 600) | `cat ~/.strongchat_api_key` |
-| `.env` (repo root, gitignored) | `STRONGCHAT_API_KEY` + `STRONGCHAT_PUBLIC_URL` next to your `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` | `grep STRONGCHAT .env` |
+| `~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` | the bearer API key (chmod 600) | `cat ~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` |
+| `.env` (repo root, gitignored) | `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` + `STRONGCHAT_PUBLIC_URL` next to your `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` | `grep STRONGCHAT .env` |
 | Caddy's cert storage (`/var/lib/caddy` by default) | Let's Encrypt cert for the sslip.io hostname | managed automatically by Caddy; no manual handling |
 
 To paste the key into opencode / Claude Desktop / any client config:
 ```sh
-cat ~/.strongchat_api_key
+cat ~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY
 ```
 
-To **rotate** the key: `rm ~/.strongchat_api_key`, remove the two
+To **rotate** the key: `rm ~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY`, remove the two
 `STRONGCHAT_*` lines from `.env`, rerun `./deploy/bootstrap.sh`, then
 update any client configs that had the old key.
 
@@ -66,8 +66,8 @@ update any client configs that had the old key.
 
    ```sh
    python -c "import secrets; print(secrets.token_urlsafe(32))" \
-     > ~/.strongchat_api_key
-   chmod 600 ~/.strongchat_api_key
+     > ~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY
+   chmod 600 ~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY
    ```
 
 2. **Boot the MCP server** on `127.0.0.1` only (NOT `0.0.0.0` — Caddy is
@@ -77,7 +77,7 @@ update any client configs that had the old key.
    STRONGCHAT_MCP_TRANSPORT=http \
    STRONGCHAT_HOST=127.0.0.1 \
    STRONGCHAT_PORT=8765 \
-   STRONGCHAT_API_KEY="$(cat ~/.strongchat_api_key)" \
+   OPENROUTER_STRONGCHAT_DEFAULT_API_KEY="$(cat ~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY)" \
    STRONGCHAT_PUBLIC_URL="https://strongchat.YOURPUBLICHOST.sslip.io" \
    .venv/bin/python src/server.py
    ```
@@ -117,7 +117,7 @@ update any client configs that had the old key.
 
    ```sh
    curl -s -X POST \
-     -H "Authorization: Bearer $(cat ~/.strongchat_api_key)" \
+     -H "Authorization: Bearer $(cat ~/.OPENROUTER_STRONGCHAT_DEFAULT_API_KEY)" \
      -H "Content-Type: application/json" \
      -H "Accept: application/json, text/event-stream" \
      -d '{"jsonrpc":"2.0","id":1,"method":"initialize",
@@ -188,7 +188,7 @@ scoped, short-lived tokens claude.ai stores via `mcp-session-id`.
 
 This deploy configures the **resource-server** side only
 (`/.well-known/oauth-protected-resource` is auto-served by the MCP SDK
-when `STRONGCHAT_API_KEY` + `STRONGCHAT_PUBLIC_URL` are set; it tells
+when `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` + `STRONGCHAT_PUBLIC_URL` are set; it tells
 clients "I expect a bearer from issuer X"). What's MISSING is the
 **authorization-server** side — the actual `/authorize` + `/token` flow
 that issues those tokens.
@@ -242,7 +242,7 @@ on the same base URL).
 | Concern | Cheap option | Robust option |
 |---|---|---|
 | Process supervision | `deploy/strongchat.service` systemd unit (see below) | container orchestration (systemd-nspawn, k8s, Nomad) |
-| Key rotation | Restart the MCP server with a new `STRONGCHAT_API_KEY` | Hashicorp Vault sidecar fetching short-lived keys |
+| Key rotation | Restart the MCP server with a new `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` | Hashicorp Vault sidecar fetching short-lived keys |
 | Abuse / cert issuance rate limit | Add Caddy's `on_demand_tls { ask <url> }` gate (see Caddyfile) | Use a fixed DNS name + standard cert issuance |
 | Audit log shipping | JSONL goes to `data/logs/strongchat.log`; any filebeat/vector | systemd journal → Loki / Datadog |
 | Bandwidth abuse | Caddy rate-limit module, or front with Cloudflare | DDoS-protected origin |
