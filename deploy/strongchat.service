@@ -1,0 +1,69 @@
+# systemd unit for the StrongChat MCP server (streamable-HTTP backend).
+#
+# Runs the MCP server in HTTP mode bound to 127.0.0.1:8765 so Caddy
+# (running separately, typically as the distro-packaged `caddy.service`)
+# is the only public surface. Env vars come from the repo's .env file
+# via EnvironmentFile=, which means anything `deploy/bootstrap.sh`
+# wrote there (STRONGCHAT_API_KEY, STRONGCHAT_PUBLIC_URL) is picked up
+# automatically.
+#
+# INSTALL
+#   sudo cp deploy/strongchat.service /etc/systemd/system/
+#   # Adjust WorkingDirectory + ExecStart paths below to your actual
+#   # repo location if it isn't /opt/strongchat (or override via
+#   # `systemctl edit strongchat`).
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now strongchat
+#   journalctl -u strongchat -f    # tail logs
+#
+# After enabling this unit, edit /etc/caddy/Caddyfile to:
+#   import /opt/strongchat/deploy/Caddyfile.local
+# and `sudo systemctl reload caddy`.
+
+[Unit]
+Description=StrongChat MCP server (streamable-HTTP backend, loopback only)
+Documentation=https://github.com/joshuamoody2018/strongchat/blob/mcp/deploy/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust to your repo location. The venv path is relative to this.
+WorkingDirectory=/opt/strongchat
+EnvironmentFile=/opt/strongchat/.env
+# Force HTTP transport + loopback bind regardless of what's in .env
+# (defence in depth: even if someone misconfigures the env, this unit
+# never exposes the server beyond the loopback interface).
+Environment="STRONGCHAT_MCP_TRANSPORT=http"
+Environment="STRONGCHAT_HOST=127.0.0.1"
+Environment="STRONGCHAT_PORT=8765"
+Environment="STRONGCHAT_LOG_LEVEL=INFO"
+
+ExecStart=/opt/strongchat/.venv/bin/python /opt/strongchat/src/server.py
+
+Restart=on-failure
+RestartSec=5s
+# Resource caps; tune to your box. The pipeline is mostly I/O-bound
+# (ChromaDB reads + OpenRouter HTTP calls); 1G is generous.
+MemoryMax=1G
+LimitNOFILE=4096
+
+# Hardening. The server only needs to bind loopback, read its assets
+# (data/chroma, data/macula_index.db), write its audit log
+# (data/logs/strongchat.log), and reach OpenRouter over HTTPS.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=false  # needs ~/.strongchat_api_key if you keep it there
+ReadWritePaths=/opt/strongchat/data/logs
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

@@ -124,7 +124,10 @@ contract).
   (`logging.py`)
 * `scripts/` - Setup, ingest, and corpus-build utilities
 * `deploy/` - `Caddyfile` (sslip.io on-demand TLS reverse proxy) +
-  `README.md` (public exposure runbook + claude.ai web OAuth caveat).
+  `bootstrap.sh` (idempotent bring-up: generates API key, detects public
+  IP, renders `Caddyfile.local`, writes env into `.env`) +
+  `strongchat.service` (optional systemd unit) + `README.md` (public
+  exposure runbook + claude.ai web OAuth caveat).
   Auth key lives in MCP backend env, not Caddy suite.
 
 ## Read-only data assets (NOT application DB)

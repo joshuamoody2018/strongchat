@@ -6,7 +6,61 @@ to a public HTTPS URL with an automatic Let's Encrypt cert via Caddy's
 `src/auth.py`), so Caddy is pure TLS + reverse proxy — single source of
 truth for the shared key.
 
-## TL;DR — bring up a public test endpoint in ~2 minutes
+> **Status today:** the server defaults to **stdio** and binds to
+> **`127.0.0.1:8765`** in HTTP mode. Nothing is exposed to the internet
+> until you (a) run `deploy/bootstrap.sh`, (b) start the MCP server in
+> HTTP mode, AND (c) start Caddy. With no `STRONGCHAT_API_KEY` /
+> `STRONGCHAT_PUBLIC_URL` in your `.env` (the default), the bearer
+> middleware is **disabled** — but so is any public surface, because
+> Caddy isn't running and the backend is loopback-only.
+
+## TL;DR — the scripted path (recommended)
+
+`deploy/bootstrap.sh` is idempotent and safe to re-run. It:
+
+1. Generates a 32-byte URL-safe API key at `~/.strongchat_api_key`
+   (chmod 600) — **never overwrites** an existing one, so clients
+   you've already configured keep working across re-runs.
+2. Auto-detects this box's public IPv4 (or accepts `PUBLIC_IP=...` /
+   `STRONGCHAT_HOSTNAME=...` overrides) and builds the sslip.io
+   hostname `https://strongchat.<A.B.C.D>.sslip.io`.
+3. Renders `deploy/Caddyfile.local` from the template (the template
+   stays untouched; `Caddyfile.local` is gitignored).
+4. Appends / updates `STRONGCHAT_API_KEY` + `STRONGCHAT_PUBLIC_URL` in
+   `.env` (loaded automatically by `src/server.py` at boot via
+   `python-dotenv`; `.env` is gitignored, never committed).
+5. Prints the exact next-step commands (start MCP server, start Caddy,
+   smoke-test with curl, opencode/Claude Desktop config snippet).
+
+```sh
+# from the repo root, on the box that will host the public endpoint:
+./deploy/bootstrap.sh
+# or, with overrides:
+PUBLIC_IP=203.0.113.42 ./deploy/bootstrap.sh
+STRONGCHAT_HOSTNAME=strongchat.example.com ./deploy/bootstrap.sh   # skip sslip.io
+```
+
+Then follow the printed next steps. Full reference for each step +
+the claude.ai web OAuth caveat + production hardening is below.
+
+### Where secrets live (and how to retrieve them)
+
+| Location | What | How to read it |
+|---|---|---|
+| `~/.strongchat_api_key` | the bearer API key (chmod 600) | `cat ~/.strongchat_api_key` |
+| `.env` (repo root, gitignored) | `STRONGCHAT_API_KEY` + `STRONGCHAT_PUBLIC_URL` next to your `OPENROUTER_API_KEY` | `grep STRONGCHAT .env` |
+| Caddy's cert storage (`/var/lib/caddy` by default) | Let's Encrypt cert for the sslip.io hostname | managed automatically by Caddy; no manual handling |
+
+To paste the key into opencode / Claude Desktop / any client config:
+```sh
+cat ~/.strongchat_api_key
+```
+
+To **rotate** the key: `rm ~/.strongchat_api_key`, remove the two
+`STRONGCHAT_*` lines from `.env`, rerun `./deploy/bootstrap.sh`, then
+update any client configs that had the old key.
+
+## Manual path (if you can't run the script)
 
 1. **Generate** a strong shared API key once, save it somewhere:
 
@@ -186,17 +240,39 @@ on the same base URL).
 
 | Concern | Cheap option | Robust option |
 |---|---|---|
-| Process supervision | `systemd` service file in `deploy/strongchat.service` (TODO) | container orchestration (systemd-nspawn, k8s, Nomad) |
+| Process supervision | `deploy/strongchat.service` systemd unit (see below) | container orchestration (systemd-nspawn, k8s, Nomad) |
 | Key rotation | Restart the MCP server with a new `STRONGCHAT_API_KEY` | Hashicorp Vault sidecar fetching short-lived keys |
 | Abuse / cert issuance rate limit | Add Caddy's `on_demand_tls { ask <url> }` gate (see Caddyfile) | Use a fixed DNS name + standard cert issuance |
 | Audit log shipping | JSONL goes to `data/logs/strongchat.log`; any filebeat/vector | systemd journal → Loki / Datadog |
 | Bandwidth abuse | Caddy rate-limit module, or front with Cloudflare | DDoS-protected origin |
 
+### systemd unit for the MCP backend
+
+`deploy/strongchat.service` runs the MCP server in HTTP mode under
+systemd so it survives reboot. The unit reads env from `.env` via an
+`EnvironmentFile=` directive. Install + enable:
+
+```sh
+sudo cp deploy/strongchat.service /etc/systemd/system/
+# Make sure the ExecStart path matches your repo location; edit the file
+# (or override with `systemctl edit strongchat`) if it differs.
+sudo systemctl daemon-reload
+sudo systemctl enable --now strongchat
+journalctl -u strongchat -f   # tail logs
+```
+
+Caddy itself ships with its own systemd unit on most distros (`apt
+install caddy`); point it at `deploy/Caddyfile.local` by editing
+`/etc/caddy/Caddyfile` to `import /abs/path/to/deploy/Caddyfile.local`.
+
 ## Files in this directory
 
 | File | Purpose |
 |---|---|
-| `Caddyfile` | Caddy reverse-proxy + on-demand TLS + sane TLS-response headers. Adjustable host substring `YOURPUBLICHOST`. |
+| `bootstrap.sh` | **The scripted path.** Idempotent — generates API key, detects public IP, renders `Caddyfile.local`, writes env vars into `.env`, prints next-step commands. Run this first on a fresh box. |
+| `Caddyfile` | Caddy reverse-proxy + on-demand TLS + sane TLS-response headers. Adjustable host substring `YOURPUBLICHOST`. Template — bootstrap.sh renders a local copy. |
+| `Caddyfile.local` | Rendered artifact (gitignored). The actual file you point Caddy at. |
+| `strongchat.service` | Optional systemd unit so the MCP server survives reboot (see "Production hardening"). |
 | `README.md` | This file. |
 
 The scripts `scripts/setup_environment.sh` and `scripts/ingest_corpus.py`

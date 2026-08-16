@@ -145,20 +145,156 @@
   missing/malformed/wrong bearer; 200 on correct bearer; 200 on
   unauthenticated path when `STRONGCHAT_API_KEY` unset (backwards
   compatible — stdio / local HTTP / ACL'd exposure stays open).
+- [x] `deploy/bootstrap.sh` — idempotent scripted bring-up: generates +
+  stores API key at `~/.strongchat_api_key` (chmod 600, never overwrites
+  existing), auto-detects public IPv4 (or accepts `PUBLIC_IP=` /
+  `STRONGCHAT_HOSTNAME=` overrides), renders `deploy/Caddyfile.local`
+  from the template, writes `STRONGCHAT_API_KEY` + `STRONGCHAT_PUBLIC_URL`
+  into `.env` (no duplicates on re-run), prints the exact next-step
+  commands. Safe to re-run; key is preserved across re-runs.
+- [x] `deploy/strongchat.service` — optional systemd unit so the MCP
+  backend survives reboot. Forces loopback bind + HTTP transport in-unit
+  (defence in depth) and reads env from `.env` via `EnvironmentFile=`.
 
-### Outstanding follow-up: hosted claude.ai web custom-connector OAuth
+### What YOU need to do to finish setting this up (manual, on the host box)
+The code + scripts are done; these are the steps only a human with shell
+access + (for some) DNS / firewall control can perform. None of them
+are coded yet on a fresh box.
+
+- [ ] Install Caddy on the box that will host the public endpoint:
+  `apt install caddy` (Debian/Ubuntu) / `brew install caddy` (macOS) /
+  https://caddyserver.com/docs/install (other). `deploy/bootstrap.sh`
+  checks for it and warns if missing.
+- [ ] Open inbound TCP 443 on the host firewall (Caddy serves HTTPS on
+  443; the MCP backend stays on 127.0.0.1:8765 — no inbound rule needed
+  for 8765). Examples:
+  - ufw: `sudo ufw allow 443/tcp`
+  - firewalld: `sudo firewall-cmd --permanent --add-service=https && sudo firewall-cmd --reload`
+  - cloud VM security group: add an inbound rule for TCP 443 from 0.0.0.0/0
+- [ ] If the box is behind home / office NAT, forward external TCP 443 →
+  this box's LAN IP in the router's port-forwarding config. (Cloud VMs
+  usually have a routable public IP already; skip this.)
+- [ ] Run `./deploy/bootstrap.sh` from the repo root. It writes:
+  - `~/.strongchat_api_key` (chmod 600) — the bearer secret.
+  - `STRONGCHAT_API_KEY` + `STRONGCHAT_PUBLIC_URL` lines in `.env`.
+  - `deploy/Caddyfile.local` (rendered; gitignored).
+  Re-read its printed output — it tells you the exact public URL.
+- [ ] (Optional but recommended) Install the systemd unit so the MCP
+  backend survives reboot:
+  ```sh
+  sudo cp deploy/strongchat.service /etc/systemd/system/
+  # Edit WorkingDirectory + ExecStart + EnvironmentFile paths in the
+  # unit to match your actual repo location if it isn't /opt/strongchat.
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now strongchat
+  journalctl -u strongchat -f   # tail logs
+  ```
+  Otherwise just run
+  `STRONGCHAT_MCP_TRANSPORT=http .venv/bin/python src/server.py`
+  in its own terminal.
+- [ ] Start Caddy pointing at the rendered config. With the distro
+  `caddy.service`, edit `/etc/caddy/Caddyfile` to a single line:
+  `import /abs/path/to/strongchat/deploy/Caddyfile.local`
+  then `sudo systemctl reload caddy`. Or run it manually in another
+  terminal: `caddy run --config deploy/Caddyfile.local`.
+- [ ] Smoke-test from a DIFFERENT machine (your laptop) to confirm the
+  public path works end-to-end:
+  ```sh
+  curl -s -X POST \
+    -H "Authorization: Bearer $(ssh host-box cat ~/.strongchat_api_key)" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -d '{"jsonrpc":"2.0","id":1,"method":"initialize",
+         "params":{"protocolVersion":"2025-11-25","capabilities":{},
+         "clientInfo":{"name":"smoke","version":"1.0"}}}' \
+    https://strongchat.YOURIP.sslip.io/mcp
+  ```
+  Expect `200 OK` + `text/event-stream` body containing `protocolVersion`.
+  Without the `Authorization` header expect `401`.
+- [ ] Point an MCP client at the public URL. Example for opencode.json
+  (or Claude Desktop's `claude_desktop_config.json`):
+  ```json
+  {
+    "mcpServers": {
+      "strongchat-remote": {
+        "url": "https://strongchat.YOURIP.sslip.io/mcp",
+        "headers": { "Authorization": "Bearer <paste `cat ~/.strongchat_api_key`>" }
+      }
+    }
+  }
+  ```
+- [ ] (Rotation) To rotate the API key later: `rm ~/.strongchat_api_key`,
+  remove the two `STRONGCHAT_*` lines from `.env`, rerun
+  `./deploy/bootstrap.sh`, restart the MCP server, and update any
+  client configs that had the old key.
+
+### What's next if we want to set up OAuth (claude.ai web custom-connector)
 The static bearer is sufficient for any client where the user can paste
 the key into config (opencode / Claude Desktop / curl / opencode-hosted
 agent harnesses). It is **NOT** sufficient on its own for the hosted
 **claude.ai web** custom-connector flow, which expects OAuth 2.0 PKCE
-authorization-server metadata at
-`/.well-known/oauth-authorization-server` plus `/authorize`, `/token`,
-`/register` endpoints that issue short-lived scoped tokens. Building
-that surfaces the MCP SDK's `OAuthAuthorizationServerProvider` hook
-(strictly additive — swap `token_verifier` for `auth_server_provider`
-on `MCPServer(...)` and implement the four PKCE endpoints). Documented
-in `deploy/README.md` under "What's left for full claude.ai web OAuth
-support" so it isn't forgotten.
+authorization-server metadata at `/.well-known/oauth-authorization-server`
+plus `/authorize`, `/token`, `/register` endpoints that issue
+short-lived scoped tokens claude.ai stores via `mcp-session-id`.
+
+The MCP SDK already supports the authorization-server side as a
+construction-time plugin (`OAuthAuthorizationServerProvider`); the work
+is implementing that provider. Strictly additive — swap
+`token_verifier` for `auth_server_provider` on `MCPServer(...)` and the
+SDK auto-exposes the OAuth metadata endpoints on the same base URL. The
+bearer guardrails from `src/auth.py` stay unchanged.
+
+- [ ] Implement `src/oauth/provider.py` with an
+  `OAuthAuthorizationServerProvider` subclass that wires:
+  - [ ] `get_authorization_server_metadata()` → serves
+    `/.well-known/oauth-authorization-server` with the issuer URL,
+    `authorization_endpoint`, `token_endpoint`,
+    `registration_endpoint`, `revocation_endpoint`,
+    `code_challenge_methods_supported=["S256"]`, scopes.
+  - [ ] `get_client(client_id)` + `register_client(metadata)` →
+    RFC 7591 dynamic client registration. For a single-user deploy the
+    minimum is to accept claude.ai's registration request and return a
+    stable client id + secret.
+  - [ ] `authorize(client, authorization_request)` → the `/authorize`
+    endpoint. For a single-user deploy, the simplest flow is a
+    consent screen that just says "Allow claude.ai to call StrongChat?"
+    with an approve button that issues a short-lived authorization
+    code. No login step needed since there's only one user.
+  - [ ] `load_authorization_code(client, code)` +
+    `exchange_authorization_code(client, code)` → the `/token`
+    endpoint. Validates the PKCE code_verifier against the stored
+    code_challenge, issues a short-lived JWT access token (e.g. 1h)
+    signed with a per-deploy signing key (NOT the bearer key — the
+    bearer key stays as a fallback / admin path).
+  - [ ] `load_access_token(token)` + `refresh_token(client,
+    refresh_token)` → token introspection + refresh flow. Optional
+    for v1; required if we want token rotation without re-onboarding.
+  - [ ] `revoke_token(...)` → the `/revoke` endpoint (RFC 7009).
+- [ ] Wire `auth_server_provider=` (instead of `token_verifier=`) into
+  `MCPServer(...)` in `src/server.py:_setup_and_build_mcp`. The SDK
+  auto-mounts the OAuth endpoints + serves
+  `/.well-known/oauth-authorization-server`. The static-bearer
+  `StaticBearerTokenVerifier` can stay as a secondary token verifier
+  if we want both paths (admin/static + OAuth-issued) — confirm with
+  the SDK's `auth=` + `token_verifier=` + `auth_server_provider=`
+  interaction; may need to compose.
+- [ ] Add a per-deploy JWT signing key (random 256-bit secret) stored
+  alongside `~/.strongchat_api_key` (e.g.
+  `~/.strongchat_oauth_signing_key`, chmod 600). `deploy/bootstrap.sh`
+  generates it if missing.
+- [ ] Tests:
+  - [ ] `tests/scripts/test_oauth_provider.py` — offline: register a
+    client, run authorize → get code, exchange → get token, validate
+    token via the verifier. Mock the client store.
+  - [ ] `tests/system/test_mcp_server_http.py` extension — drive the
+    full PKCE flow over the in-process uvicorn: register, authorize,
+    exchange, then call `retrieve_context` with the issued token.
+- [ ] Update `deploy/README.md` to document the claude.ai web
+  custom-connector onboarding flow (URL to paste, scopes, consent
+  screen).
+- [ ] Add `STRONGCHAT_OAUTH_ISSUER_URL` env (or reuse
+  `STRONGCHAT_PUBLIC_URL`) so the JWT `iss` claim matches what
+  claude.ai expects from the metadata endpoint.
 
 ## Earlier parity work (pre-MCP, still relevant)
 
