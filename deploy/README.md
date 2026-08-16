@@ -100,7 +100,8 @@ update any client configs that had the old key.
 
 4. **Run Caddy** in another terminal (install once:
 
-   `apt install caddy` / `brew install caddy` / `xcaddy`):
+   `./scripts/install_caddy.sh` (Debian/Ubuntu, idempotent) /
+   `brew install caddy` (macOS) / `xcaddy` / https://caddyserver.com/docs/install):
 
    ```sh
    caddy run --config deploy/Caddyfile

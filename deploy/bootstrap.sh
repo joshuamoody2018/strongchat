@@ -201,7 +201,7 @@ echo
 log "=== sanity ==="
 command -v caddy >/dev/null 2>&1 \
   && log "caddy: installed at $(command -v caddy)" \
-  || warn "caddy not on PATH. Install:  apt install caddy  |  brew install caddy  |  https://caddyserver.com/docs/install"
+  || warn "caddy not on PATH. Install:  ./scripts/install_caddy.sh  (Debian/Ubuntu)  |  https://caddyserver.com/docs/install  (other)"
 command -v .venv/bin/python >/dev/null 2>&1 \
   && log "python venv: .venv/bin/python exists" \
   || warn ".venv/bin/python missing. Run scripts/setup_environment.sh first."

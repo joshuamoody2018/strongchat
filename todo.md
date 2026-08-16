@@ -162,8 +162,10 @@ access + (for some) DNS / firewall control can perform. None of them
 are coded yet on a fresh box.
 
 - [ ] Install Caddy on the box that will host the public endpoint:
-  `apt install caddy` (Debian/Ubuntu) / `brew install caddy` (macOS) /
-  https://caddyserver.com/docs/install (other). `deploy/bootstrap.sh`
+  `./scripts/install_caddy.sh` (Debian/Ubuntu, idempotent) /
+  `brew install caddy` (macOS) / https://caddyserver.com/docs/install
+  (other). Also installed automatically by `scripts/setup_environment.sh`
+  via an interactive prompt at the end of dev setup. `deploy/bootstrap.sh`
   checks for it and warns if missing.
 - [ ] Open inbound TCP 443 on the host firewall (Caddy serves HTTPS on
   443; the MCP backend stays on 127.0.0.1:8765 — no inbound rule needed
