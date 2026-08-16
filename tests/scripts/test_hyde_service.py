@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Offline unit tests for HydeService.
 
-Mocks LLMWrapper.call_api so no live API calls are made. The only real
-dependency exercised is the cached ref_message_types schema from the local
-SQLite database.
+Mocks LLMWrapper.call_api so no live API calls are made. Message-type
+configuration now comes from the in-process registry; there is no
+application database.
 """
 
 import asyncio
@@ -16,7 +16,6 @@ from unittest.mock import AsyncMock
 # Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
-from config.cache import GlobalReferenceCache
 from services.hyde import HydeService
 from services.llm.aimessage import AIMessage
 from services.llm.exceptions import LLMError

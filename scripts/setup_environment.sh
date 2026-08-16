@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 # Idempotent local development environment bootstrap for StrongChat.
 # Installs system dependencies, creates a Python .venv, installs requirements,
-# creates the chat DB, downloads and ingests the Macula Greek + Hebrew
-# corpora + STEPBible TBESG/LSJ/TBESH lexicons, and runs pipeline
-# message-type migrations.
+# downloads and ingests the Macula Greek + Hebrew
+# corpora + STEPBible TBESG/LSJ/TBESH lexicons. There is NO application
+# database; the audit trail is the JSONL log under data/logs/.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-DB_PATH="data/chat_database.db"
 VENV_DIR=".venv"
 PYTHON="$VENV_DIR/bin/python"
 PIP="$VENV_DIR/bin/pip"
@@ -83,14 +82,6 @@ log "Installing Python requirements..."
 log "Ensuring data directory exists..."
 mkdir -p data
 
-log "Ensuring SQLite database exists at $DB_PATH..."
-if [ ! -f "$DB_PATH" ]; then
-    "$PYTHON" scripts/create_new_database.py --db-path "$DB_PATH"
-    log "Database created and seeded."
-else
-    log "Database already exists; skipping schema creation and seeding."
-fi
-
 log "Downloading Macula Greek corpus (Clear-Bible/macula-greek, CC BY 4.0)..."
 if [ ! -f data/macula/macula-greek.tsv ]; then
     log "Downloading Macula Greek corpus (Clear-Bible/macula-greek, CC BY 4.0)..."
@@ -132,5 +123,8 @@ else
 fi
 
 log "Environment setup complete."
-log "Macula Hebrew + Greek data ingested, ChromaDB populated. To re-run: delete data/macula_index.db, data/macula/*.tsv, data/bible/*.json, or data/chroma/ and re-run this script."
+log "Macula Hebrew + Greek data ingested, ChromaDB populated."
+log "No application database is required — audit trail is JSONL at data/logs/strongchat.log"
+log "Run the MCP server with: $VENV_DIR/bin/python src/server.py"
+log "Run the CLI smoke-test with: $VENV_DIR/bin/python src/main.py \"<query>\""
 log "Activate the virtual environment with: source $VENV_DIR/bin/activate"

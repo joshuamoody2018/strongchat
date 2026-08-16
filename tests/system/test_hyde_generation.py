@@ -1,28 +1,24 @@
 #!/usr/bin/env python3
 """Live system test for HyDE generation via OpenRouter.
 
-This test calls the real OpenRouter API for one representative probe,
-generates intents, feeds them to HydeService in parallel, and validates that
-one HyDE document (or error entry) is produced per intent and that every
-successful document meets the minimum length requirement. It also verifies that
-each attempted intent is recorded as a ``hyde_generation`` message row.
-
-Run with the environment loaded:
-    set -a; . ./.env; set +a; .venv/bin/python tests/system/test_hyde_generation.py
+Calls the real OpenRouter API for one representative probe, generates
+intents, feeds them to HydeService in parallel, and validates that one
+HyDE document (or error entry) is produced per intent. The audit trail is
+now JSONL log records; no application DB.
 """
 
 import asyncio
 import os
 import sys
+import uuid
 
 from dotenv import load_dotenv
 
-# Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
+from config.logging import configure_logging
 from services.hyde import HydeService
 from services.intent import IntentService
-from services.sqlite.database import ChatDatabase
 
 
 QUERY = "what does the Bible say about anxiety"
@@ -31,29 +27,25 @@ QUERY = "what does the Bible say about anxiety"
 async def run_tests() -> bool:
     """Run the live HyDE generation system test."""
     print("=== Live HyDE Generation System Test ===\n")
-
     load_dotenv()
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key or api_key == "your_openrouter_api_key_here":
         print("SKIP: OPENROUTER_API_KEY is not present in the environment.")
         return True
 
-    db = ChatDatabase()
-    session_uuid = db.create_session(
-        name=f"hyde-test: {QUERY[:50]}",
-        created_by="test",
-    )
-    print(f"Session: {session_uuid}")
+    configure_logging()
+    correlation_id = f"hyde-test-{uuid.uuid4()}"
+    print(f"Correlation id: {correlation_id}")
 
     intent_service = IntentService()
     hyde_service = HydeService()
 
     try:
-        intent_result = await intent_service.generate_intents(QUERY, session_uuid)
+        intent_result = await intent_service.generate_intents(QUERY, correlation_id)
         intents = intent_result["intents"]
         print(f"Intents returned: {len(intents)}")
 
-        results = await hyde_service.generate_for_intents(intents, session_uuid)
+        results = await hyde_service.generate_for_intents(intents, correlation_id)
         assert len(results) == len(intents), (
             f"expected {len(intents)} results, got {len(results)}"
         )
@@ -69,13 +61,6 @@ async def run_tests() -> bool:
 
         print(f"Successful HyDE docs: {success_count}/{len(intents)}")
 
-        messages = db.get_messages_by_session_and_type(
-            session_uuid, "hyde_generation"
-        )
-        assert len(messages) == len(intents), (
-            f"expected {len(intents)} hyde_generation messages, got {len(messages)}"
-        )
-
         print("\n=== Result ===")
         print("PASS")
         return True
@@ -86,7 +71,8 @@ async def run_tests() -> bool:
         print(f"ERROR: {exc}")
         return False
     finally:
-        db.close()
+        intent_service.llm.close()
+        hyde_service.llm.close()
 
 
 if __name__ == "__main__":

@@ -3,3 +3,5 @@ jsonschema>=4.10,<5
 requests>=2.31,<3
 python-dotenv>=1.0,<2
 chromadb>=1.0,<2
+mcp>=1.0
+concurrent-log-handler>=0.9

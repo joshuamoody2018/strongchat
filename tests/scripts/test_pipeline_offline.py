@@ -5,18 +5,18 @@ Covers: parsing fenced/prose JSON and schema validation on AIMessage,
 AIMessage lifecycle (creation defaults, success/failure, retries),
 LLMWrapper retry with mocked _call_api_async, EmbeddingService retry with
 an injected embed_fn, HydeService partial failure, and intent schema
-boundaries. All tests use fixture DBs in temp dirs and a dummy API key
-so no live OpenRouter calls are made.
+boundaries. No application database; audit assertions use the standard
+``logging`` module via ``self.assertLogs``.
 """
 
 import asyncio
 import hashlib
 import json
+import logging
 import os
-import sqlite3
 import sys
-import tempfile
 import unittest
+import uuid
 from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
@@ -25,11 +25,8 @@ from jsonschema import validate, ValidationError
 
 from config import (
     INTENT_GENERATION_SCHEMA,
-    INTENT_GENERATION_PROMPT,
     HYDE_GENERATION_SCHEMA,
-    HYDE_GENERATION_PROMPT,
 )
-from config.cache import GlobalReferenceCache
 from services.embeddings import EmbeddingService
 from services.hyde import HydeService
 from services.llm.aimessage import AIMessage
@@ -37,43 +34,6 @@ from services.llm.exceptions import APIConnectionError, MaxRetriesExceededError
 from services.llm.wrapper import LLMWrapper
 
 DIMENSION = 1536
-
-SCHEMA_SQL = """
-CREATE TABLE sessions (
-    uuid TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_by TEXT
-);
-
-CREATE TABLE ref_message_types (
-    slug TEXT PRIMARY KEY,
-    step_name TEXT NOT NULL,
-    creator_type TEXT NOT NULL,
-    request_schema TEXT NOT NULL,
-    model_slug TEXT NOT NULL,
-    temperature REAL DEFAULT 0.0,
-    additional_model_settings TEXT,
-    max_retries INTEGER DEFAULT 3,
-    is_active BOOLEAN DEFAULT TRUE,
-    description TEXT,
-    prompt_template TEXT
-);
-
-CREATE TABLE messages (
-    uuid TEXT PRIMARY KEY,
-    session_uuid TEXT,
-    message_type_slug TEXT,
-    unique_prompt TEXT NOT NULL,
-    raw_response TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    response_at TIMESTAMP,
-    num_tries INTEGER DEFAULT 1,
-    error_text TEXT,
-    FOREIGN KEY (session_uuid) REFERENCES sessions (uuid),
-    FOREIGN KEY (message_type_slug) REFERENCES ref_message_types (slug)
-);
-"""
 
 INTENT_ONE = {
     "intent_id": "comfort",
@@ -94,126 +54,6 @@ INTENT_TWO = {
 LONG_HYDE_DOC = (
     "A long enough hypothetical passage about comfort and anxiety. " * 6
 )
-
-
-def _create_fixture_db():
-    """Return a temp directory and a seeded fixture DB path."""
-    tmp = tempfile.TemporaryDirectory()
-    db_path = os.path.join(tmp.name, "fixture.db")
-    with sqlite3.connect(db_path) as conn:
-        conn.executescript(SCHEMA_SQL)
-        conn.execute(
-            """
-            INSERT INTO ref_message_types
-              (slug, step_name, creator_type, request_schema, model_slug,
-               temperature, additional_model_settings, max_retries,
-               is_active, description, prompt_template)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "intent_generation",
-                "Intent Generation",
-                "llm",
-                json.dumps(INTENT_GENERATION_SCHEMA),
-                "meta-llama/llama-3.3-70b-instruct",
-                0.2,
-                '{"max_tokens": 1200}',
-                3,
-                1,
-                "Generate structured intents",
-                INTENT_GENERATION_PROMPT,
-            ),
-        )
-        conn.execute(
-            """
-            INSERT INTO ref_message_types
-              (slug, step_name, creator_type, request_schema, model_slug,
-               temperature, additional_model_settings, max_retries,
-               is_active, description, prompt_template)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "hyde_generation",
-                "HyDE Generation",
-                "llm",
-                json.dumps(HYDE_GENERATION_SCHEMA),
-                "mistralai/mistral-small-24b-instruct-2501",
-                0.7,
-                '{"max_tokens": 800}',
-                3,
-                1,
-                "Generate hypothetical passage",
-                HYDE_GENERATION_PROMPT,
-            ),
-        )
-        conn.execute(
-            """
-            INSERT INTO ref_message_types
-              (slug, step_name, creator_type, request_schema, model_slug,
-               temperature, additional_model_settings, max_retries,
-               is_active, description, prompt_template)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "embedding_generation",
-                "Embedding Generation",
-                "programmatic",
-                json.dumps(
-                    {
-                        "type": "object",
-                        "properties": {
-                            "model": {"type": "string"},
-                            "dimension": {"type": "integer"},
-                            "count": {"type": "integer"},
-                        },
-                        "required": ["model", "dimension", "count"],
-                    }
-                ),
-                "openai/text-embedding-3-small",
-                0.0,
-                "{}",
-                3,
-                1,
-                "Batched embedding generation",
-                None,
-            ),
-        )
-        conn.execute(
-            """
-            INSERT INTO ref_message_types
-              (slug, step_name, creator_type, request_schema, model_slug,
-               temperature, additional_model_settings, max_retries,
-               is_active, description, prompt_template)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "context_retrieval",
-                "Context Retrieval",
-                "programmatic",
-                json.dumps(
-                    {
-                        "type": "object",
-                        "properties": {
-                            "intent_id": {"type": "string"},
-                            "translation_count": {"type": "integer"},
-                            "hit_count": {"type": "integer"},
-                            "scored_word_count": {"type": "integer"},
-                            "kept_word_count": {"type": "integer"},
-                        },
-                        "required": ["intent_id", "translation_count", "hit_count", "scored_word_count", "kept_word_count"],
-                    }
-                ),
-                "n/a",
-                0.0,
-                "{}",
-                3,
-                1,
-                "Per-intent original-language context enrichment for retrieved verses",
-                None,
-            ),
-        )
-        conn.commit()
-    return tmp, db_path
 
 
 def _intent_fixture():
@@ -396,18 +236,14 @@ class TestLLMWrapperRetry(unittest.TestCase):
     """Offline retry tests for LLMWrapper."""
 
     def setUp(self):
-        """Create a fresh fixture DB and a wrapper instance."""
+        """Create a wrapper instance with a dummy API key."""
         os.environ["OPENROUTER_API_KEY"] = "dummy-key-for-offline-tests"
-        self._tmp, self.db_path = _create_fixture_db()
-        self.wrapper = LLMWrapper(self.db_path)
-        self.session_uuid = self.wrapper.db.create_session(name="wrapper-test")
+        self.wrapper = LLMWrapper()
+        self.correlation_id = str(uuid.uuid4())
 
     def tearDown(self):
-        """Close the wrapper and drop the temp directory."""
-        try:
-            self.wrapper.close()
-        finally:
-            self._tmp.cleanup()
+        """Close the wrapper."""
+        self.wrapper.close()
 
     def _make_async_side_effect(self, responses):
         """Return an async side_effect that consumes ``responses`` in order."""
@@ -420,7 +256,7 @@ class TestLLMWrapperRetry(unittest.TestCase):
         return _side_effect
 
     def test_retry_two_failures_then_success(self):
-        """Two transient failures followed by success yields one success row."""
+        """Two transient failures followed by success yields one success log row."""
         responses = [
             APIConnectionError("failure 1"),
             APIConnectionError("failure 2"),
@@ -437,32 +273,32 @@ class TestLLMWrapperRetry(unittest.TestCase):
                 "services.llm.wrapper.asyncio.sleep",
                 new_callable=AsyncMock,
             ):
-                aimessage = asyncio.run(
-                    self.wrapper.call_api(
-                        "intent_generation",
-                        "test prompt",
-                        self.session_uuid,
+                with self.assertLogs("strongchat", level="INFO") as cm:
+                    aimessage = asyncio.run(
+                        self.wrapper.call_api(
+                            "intent_generation",
+                            "test prompt",
+                            self.correlation_id,
+                        )
                     )
-                )
 
         self.assertEqual(aimessage.num_tries, 3)
         self.assertIsNotNone(aimessage.raw_response)
 
-        # Check message was recorded
-        self.wrapper.db.cursor.execute("""
-            SELECT uuid, session_uuid, message_type_slug, unique_prompt,
-                   raw_response, created_at, response_at, num_tries, error_text
-            FROM messages 
-            WHERE session_uuid = ? AND message_type_slug = ?
-        """, (self.session_uuid, "intent_generation"))
-        rows = self.wrapper.db.cursor.fetchall()
-        self.assertEqual(len(rows), 1)
-        self.assertIsNotNone(rows[0][4])
-        self.assertIsNone(rows[0][8])
-        self.assertEqual(rows[0][7], 3)
+        llm_info = [
+            r for r in cm.records
+            if r.__dict__.get("event") == "llm_call"
+            and r.__dict__.get("status") == "ok"
+        ]
+        self.assertEqual(len(llm_info), 1)
+        self.assertEqual(llm_info[0].__dict__.get("attempts"), 3)
+        self.assertEqual(
+            llm_info[0].__dict__.get("correlation_id"), self.correlation_id
+        )
 
-    def test_retry_persistent_failure_records_error(self):
-        """Persistent transient failure raises MaxRetriesExceededError."""
+    def test_retry_persistent_failure_emits_error_log(self):
+        """Persistent transient failure raises MaxRetriesExceededError and
+        emits one ERROR ``llm_call`` log record."""
 
         async def _always_fail(*args, **kwargs):
             raise APIConnectionError("persistent failure")
@@ -477,45 +313,32 @@ class TestLLMWrapperRetry(unittest.TestCase):
                 "services.llm.wrapper.asyncio.sleep",
                 new_callable=AsyncMock,
             ):
-                with self.assertRaises(MaxRetriesExceededError):
-                    asyncio.run(
-                        self.wrapper.call_api(
-                            "intent_generation",
-                            "test prompt",
-                            self.session_uuid,
+                with self.assertLogs("strongchat", level="ERROR") as cm:
+                    with self.assertRaises(MaxRetriesExceededError):
+                        asyncio.run(
+                            self.wrapper.call_api(
+                                "intent_generation",
+                                "test prompt",
+                                self.correlation_id,
+                            )
                         )
-         )
 
-         # Check failure was recorded with direct query
-        self.wrapper.db.cursor.execute("""
-            SELECT uuid, session_uuid, message_type_slug, unique_prompt,
-                   raw_response, created_at, response_at, num_tries, error_text
-            FROM messages 
-            WHERE session_uuid = ? AND message_type_slug = ?
-        """, (self.session_uuid, "intent_generation"))
-        rows = self.wrapper.db.cursor.fetchall()
-        self.assertEqual(len(rows), 1)
-        self.assertIsNone(rows[0][4])
-        self.assertIsNotNone(rows[0][8])
-        # num_tries starts at 1 and is incremented once per attempt,
-        # including the final failed attempt.
-        self.assertEqual(rows[0][7], 4)
+        llm_errors = [
+            r for r in cm.records
+            if r.__dict__.get("event") == "llm_call"
+            and r.__dict__.get("status") == "error"
+        ]
+        self.assertEqual(len(llm_errors), 1)
+        self.assertIn("persistent failure",
+                      str(llm_errors[0].__dict__.get("error")))
 
 
 class TestEmbeddingServiceRetry(unittest.TestCase):
     """Offline retry test for EmbeddingService."""
 
-    def setUp(self):
-        """Create a fresh fixture DB and point the cache at it."""
-        os.environ["OPENROUTER_API_KEY"] = "dummy-key-for-offline-tests"
-        self._tmp, self.db_path = _create_fixture_db()
-
-    def tearDown(self):
-        """Drop the temp directory."""
-        self._tmp.cleanup()
-
     def test_retry_two_failures_then_success(self):
         """Two injected failures followed by success returns correct vectors."""
+        os.environ["OPENROUTER_API_KEY"] = "dummy-key-for-offline-tests"
         state = {"calls": 0}
 
         def embed_fn(texts: list[str]) -> list[list[float]]:
@@ -528,7 +351,7 @@ class TestEmbeddingServiceRetry(unittest.TestCase):
             "services.embeddings.service.asyncio.sleep",
             new_callable=AsyncMock,
         ):
-            service = EmbeddingService(self.db_path, embed_fn=embed_fn)
+            service = EmbeddingService(embed_fn=embed_fn)
             result = asyncio.run(service.embed_texts(["first", "second"]))
             service.close()
 
@@ -542,18 +365,14 @@ class TestHydePartialFailure(unittest.TestCase):
     """Offline test for HydeService mixed success/failure."""
 
     def setUp(self):
-        """Create a fresh fixture DB and a HydeService instance."""
+        """Create a HydeService instance."""
         os.environ["OPENROUTER_API_KEY"] = "dummy-key-for-offline-tests"
-        self._tmp, self.db_path = _create_fixture_db()
-        self.service = HydeService(self.db_path)
-        self.session_uuid = self.service.db.create_session(name="hyde-test")
+        self.service = HydeService()
+        self.correlation_id = str(uuid.uuid4())
 
     def tearDown(self):
-        """Close the underlying wrapper and drop the temp directory."""
-        try:
-            self.service.llm.close()
-        finally:
-            self._tmp.cleanup()
+        """Close the underlying wrapper."""
+        self.service.llm.close()
 
     async def _hyde_call_api_async_mock(self, *args, **kwargs):
         """Fail the call that contains the comfort intent, succeed the other."""
@@ -562,8 +381,8 @@ class TestHydePartialFailure(unittest.TestCase):
             raise APIConnectionError("simulated hyde failure")
         return json.dumps({"hyde_document": LONG_HYDE_DOC})
 
-    def test_one_success_one_failure_records_error_row(self):
-        """One intent succeeds and one fails; result is mixed, DB has error row."""
+    def test_one_success_one_failure_returns_mixed_result(self):
+        """One intent succeeds and one fails; result is mixed, no DB write."""
         with patch.object(
             self.service.llm,
             "_call_api_async",
@@ -576,7 +395,7 @@ class TestHydePartialFailure(unittest.TestCase):
             ):
                 result = asyncio.run(
                     self.service.generate_for_intents(
-                        [INTENT_ONE, INTENT_TWO], self.session_uuid
+                        [INTENT_ONE, INTENT_TWO], self.correlation_id
                     )
                 )
 
@@ -588,20 +407,6 @@ class TestHydePartialFailure(unittest.TestCase):
         self.assertEqual(docs[0]["intent_id"], "trust")
         self.assertEqual(errors[0]["intent_id"], "comfort")
         self.assertIn("error", errors[0])
-
-
-
-        # Check messages were recorded
-        self.service.db.cursor.execute("""
-            SELECT uuid, session_uuid, message_type_slug, unique_prompt,
-                   raw_response, created_at, response_at, num_tries, error_text
-            FROM messages 
-            WHERE session_uuid = ? AND message_type_slug = ?
-        """, (self.session_uuid, "hyde_generation"))
-        rows = self.service.db.cursor.fetchall()
-        self.assertEqual(len(rows), 2)
-        error_rows = [r for r in rows if r[8] is not None]
-        self.assertEqual(len(error_rows), 1)
 
 
 class TestIntentSchemaBoundary(unittest.TestCase):

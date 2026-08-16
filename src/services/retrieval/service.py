@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 from services.base import BaseService
 from services.embeddings import EmbeddingService
@@ -16,27 +16,31 @@ class RetrievalService(BaseService):
 
     def __init__(
         self,
-        db_path: str = "data/chat_database.db",
+        registry=None,
         embedding_service: EmbeddingService = None,
         verse_store: VerseStore = None,
+        chroma_path: str = "data/chroma",
     ):
         """Initialize the retrieval service.
 
         Args:
-            db_path: Path to the SQLite database file.
-            embedding_service: Optional injected EmbeddingService. If None, one
-                is constructed using ``db_path``.
-            verse_store: Optional injected VerseStore. If None, one is
-                constructed using the default Chroma path.
+            registry: Optional overridden :class:`MessageTypeDefRegistry`.
+            embedding_service: Optional injected :class:`EmbeddingService`. If
+                None, one is constructed using the same registry.
+            verse_store: Optional injected :class:`VerseStore`. If None, one is
+                constructed at ``chroma_path``.
+            chroma_path: Path to the ChromaDB persistence directory; ignored
+                when ``verse_store`` is injected.
         """
-        super().__init__(db_path)
+        super().__init__(registry=registry)
         self._owns_embedding_service = embedding_service is None
-        self.embedding_service = embedding_service or EmbeddingService(db_path)
-        self.store = verse_store or VerseStore()
+        self.embedding_service = embedding_service or EmbeddingService(
+            registry=self.registry,
+        )
+        self.store = verse_store or VerseStore(chroma_path)
 
     def close(self) -> None:
-        """Close the underlying database connection and owned services."""
-        self.llm.close()
+        """No resources to release; kept for backwards compatibility."""
         if self._owns_embedding_service:
             self.embedding_service.close()
 
@@ -49,21 +53,15 @@ class RetrievalService(BaseService):
     ) -> List[Dict[str, Any]]:
         """Embed HyDE documents and retrieve verse hits per translation.
 
-        Each successful (non-empty) HyDE document is embedded in a single call
-        and then queried against every requested translation collection in
-        parallel. Results are returned per doc/translation pair, with hits
-        sorted by Chroma distance ascending.
-
         Args:
             hyde_docs: List of dicts with ``intent_id`` and ``hyde_document``.
-            session_uuid: UUID of the parent session.
+            session_uuid: Log correlation id (no longer persisted).
             top_k: Number of nearest neighbors per query.
             translations: Translation slugs to query.
 
         Returns:
             List of result items, each with ``intent_id``, ``doc_index``,
-            ``translation``, and ``hits`` containing ``id``, ``text``,
-            ``reference``, and ``distance``.
+            ``translation``, ``embedding``, and ``hits``.
         """
         valid_docs: List[tuple[int, Dict[str, Any]]] = []
         for i, doc in enumerate(hyde_docs):

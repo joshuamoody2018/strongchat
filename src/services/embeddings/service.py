@@ -1,13 +1,15 @@
 """Batched OpenRouter embedding service.
 
-Provides chunked, retry-aware embedding generation with a single summary
-message recorded per ``embed_texts`` call. Raw vectors are never persisted.
+Provides chunked, retry-aware embedding generation. Per-call audit is emitted
+as structured log records (INFO timing + DEBUG prompt/response); raw vectors
+are NEVER persisted.
 """
 
 import asyncio
 import inspect
 import json
 import logging
+import time
 from typing import Callable, List, Optional, Tuple
 
 import aiohttp
@@ -36,24 +38,22 @@ class EmbeddingService(BaseService):
 
     def __init__(
         self,
-        db_path: str = "data/chat_database.db",
+        registry=None,
         embed_fn: Optional[EmbedFn] = None,
     ):
         """Initialize the embedding service.
 
         Args:
-            db_path: Path to the SQLite database file.
+            registry: Optional overridden :class:`MessageTypeDefRegistry`.
             embed_fn: Optional injectable embedding function for tests.
                 Signature: ``(texts: List[str]) -> List[List[float]]``.
                 If None, the live OpenRouter embeddings endpoint is used.
         """
-        super().__init__(db_path)
+        super().__init__(registry=registry)
         self._embed_fn = embed_fn
-        self._message_type = self.cache.get_message_type("embedding_generation")
-        if not self._message_type:
-            raise ValueError("Message type 'embedding_generation' not found or inactive")
-        self._model_slug = self._message_type["model_slug"]
-        self._max_retries = self._message_type["max_retries"]
+        self._message_type = self.registry.get("embedding_generation")
+        self._model_slug = self._message_type.model_slug
+        self._max_retries = self._message_type.max_retries
         self._headers = self.llm.headers
 
     async def embed_texts(
@@ -65,25 +65,19 @@ class EmbeddingService(BaseService):
     ) -> List[List[float]]:
         """Generate embeddings for a list of texts.
 
-        Inputs are split into chunks of ``chunk_size`` and submitted
-        sequentially. Results are concatenated in input order.
-
         Args:
             texts: List of input strings.
-            session_uuid: Optional session UUID for recording.
-            record: Whether to record an ``embedding_generation`` message.
+            session_uuid: Optional log correlation id.
+            record: Whether to emit INFO + DEBUG log records for this call.
             chunk_size: Maximum number of texts per chunk.
 
         Returns:
             List of embedding vectors in the same order as ``texts``.
-
-        Raises:
-            MaxRetriesExceededError: If transient errors persist after retries.
-            APIResponseError: If the API returns a non-retryable error.
         """
         chunks = [texts[i : i + chunk_size] for i in range(0, len(texts), chunk_size)]
         results: List[List[float]] = []
         num_tries = 0
+        started = time.monotonic()
 
         try:
             for chunk in chunks:
@@ -92,6 +86,7 @@ class EmbeddingService(BaseService):
                 num_tries += chunk_tries
 
             if record and session_uuid is not None:
+                elapsed_ms = int((time.monotonic() - started) * 1000)
                 raw_response = json.dumps(
                     {
                         "model": self._model_slug,
@@ -106,6 +101,13 @@ class EmbeddingService(BaseService):
                     session_uuid=session_uuid,
                     raw_response=raw_response,
                     num_tries=num_tries,
+                    extra={
+                        "event": "embedding_generation",
+                        "model": self._model_slug,
+                        "count": len(texts),
+                        "elapsed_ms": elapsed_ms,
+                        "status": "ok",
+                    },
                 )
 
             return results
@@ -119,19 +121,21 @@ class EmbeddingService(BaseService):
                     session_uuid=session_uuid,
                     error_text=str(exc),
                     num_tries=num_tries,
+                    extra={
+                        "event": "embedding_generation",
+                        "model": self._model_slug,
+                        "count": len(texts),
+                        "status": "error",
+                    },
                 )
             raise
 
     def close(self) -> None:
-        """Close the underlying database connection."""
-        self.llm.close()
+        """No resources to release; kept for backwards compatibility."""
+        pass
 
     async def _embed_chunk(self, texts: List[str]) -> Tuple[List[List[float]], int]:
-        """Embed a single chunk, retrying transient failures.
-
-        Returns:
-            A tuple of (embeddings, attempts_made).
-        """
+        """Embed a single chunk, retrying transient failures."""
         attempts = 0
         last_error: Optional[Exception] = None
 

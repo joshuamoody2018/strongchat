@@ -6,10 +6,14 @@ via the batched embedding service, and upserts them into a ChromaDB collection.
 Runs are idempotent: repeated executions overwrite the same verse IDs and
 complete the collection count.
 
+Audit: a single ``corpus_ingest`` INFO log record per translation summarising
+``translation, verses, batch_count, elapsed_ms, status``. There is no
+application database.
+
 Exit codes:
     0 - success
     1 - configuration or I/O error
-    2 - database/vector store error
+    2 - vector store error
 """
 
 from __future__ import annotations
@@ -19,6 +23,8 @@ import asyncio
 import json
 import os
 import sys
+import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -27,14 +33,13 @@ from dotenv import load_dotenv
 # Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
+from config.logging import configure_logging, get_logger
 from services.base import BaseService
 from services.embeddings.service import EmbeddingService
-from services.sqlite.database import ChatDatabase
 from services.vectordb.store import VerseStore
 
 
 CHUNK_SIZE = 256
-DEFAULT_DB_PATH = "data/chat_database.db"
 DEFAULT_CHROMA_PATH = "data/chroma"
 BIBLE_DIR = Path(__file__).resolve().parent.parent / "data" / "bible"
 MANIFEST_PATH = BIBLE_DIR / "manifest.json"
@@ -51,11 +56,7 @@ def _load_manifest() -> dict[str, Any]:
 
 
 def _flatten_translation(data: dict[str, Any], slug: str) -> tuple[list[str], list[str], list[dict[str, Any]]]:
-    """Flatten a whole-translation JSON into ChromaDB-ready lists.
-
-    Returns:
-        (ids, documents, metadatas) where each verse is represented once.
-    """
+    """Flatten a whole-translation JSON into ChromaDB-ready lists."""
     ids: list[str] = []
     documents: list[str] = []
     metadatas: list[dict[str, Any]] = []
@@ -88,11 +89,11 @@ async def _ingest_translation(
     slug: str,
     store: VerseStore,
     embedder: EmbeddingService,
-    db: ChatDatabase,
+    base: BaseService,
     max_batches: int | None,
     manifest: dict[str, Any],
 ) -> None:
-    """Embed and upsert a single translation, then record a summary row."""
+    """Embed and upsert a single translation, then emit a summary log record."""
     collection_name = f"{slug.lower()}_verses"
     expected_verses = manifest[slug]["verses"]
 
@@ -106,7 +107,6 @@ async def _ingest_translation(
             f"{slug}: manifest expects {expected_verses} verses, file has {len(documents)}"
         )
 
-    # Ensure the collection exists with the cosine HNSW space.
     store.get_or_create_collection(collection_name, metadata={"hnsw:space": "cosine"})
 
     total_batches = (len(documents) + CHUNK_SIZE - 1) // CHUNK_SIZE
@@ -114,6 +114,7 @@ async def _ingest_translation(
 
     print(f"{slug}: ingesting {len(documents)} verses in {batches_to_run}/{total_batches} batches")
 
+    started = time.monotonic()
     for batch_index in range(batches_to_run):
         start = batch_index * CHUNK_SIZE
         end = start + CHUNK_SIZE
@@ -145,22 +146,31 @@ async def _ingest_translation(
             f"{slug}: collection count {actual_count} != expected {expected_verses}"
         )
 
-    # Record one summary message for the completed ingest.
-    session_uuid = db.create_session("corpus-ingest", created_by="pipeline")
-    base = BaseService(db.db_path)
-    try:
-        await base.record_message(
-            message_type_slug="corpus_ingest",
-            unique_prompt=json.dumps(
-                {"translation": slug, "verses": expected_verses, "collection": collection_name}
-            ),
-            session_uuid=session_uuid,
-            raw_response=json.dumps({"status": "ok", "dimension": 1536}),
-            num_tries=1,
-        )
-    finally:
-        base.llm.db.close()
-        await base.llm.db_port.close()
+    # Emit one corpus_ingest summary record (no DB write; JSONL log only).
+    correlation_id = str(uuid.uuid4())
+    summary = {
+        "translation": slug,
+        "verses": expected_verses,
+        "collection": collection_name,
+        "batches": batches_to_run,
+    }
+    await base.record_message(
+        message_type_slug="corpus_ingest",
+        unique_prompt=json.dumps(summary),
+        session_uuid=correlation_id,
+        raw_response=json.dumps(
+            {"status": "ok", "dimension": 1536, "translation": slug, "verses": expected_verses}
+        ),
+        num_tries=1,
+        extra={
+            "event": "corpus_ingest",
+            "translation": slug,
+            "verse_count": expected_verses,
+            "batch_count": batches_to_run,
+            "elapsed_ms": int((time.monotonic() - started) * 1000),
+            "status": "ok",
+        },
+    )
     print(f"{slug}: verified {actual_count} verses in {collection_name}")
 
 
@@ -206,12 +216,6 @@ async def main(argv: list[str] | None = None) -> int:
         description="Ingest Bible corpora into ChromaDB."
     )
     parser.add_argument(
-        "--db-path",
-        type=str,
-        default=DEFAULT_DB_PATH,
-        help=f"Path to the SQLite database (default: {DEFAULT_DB_PATH}).",
-    )
-    parser.add_argument(
         "--chroma-path",
         type=str,
         default=DEFAULT_CHROMA_PATH,
@@ -238,6 +242,7 @@ async def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     load_dotenv()
+    configure_logging()
     if not os.getenv("OPENROUTER_API_KEY"):
         print("ERROR: OPENROUTER_API_KEY not configured", file=sys.stderr)
         return 1
@@ -251,12 +256,9 @@ async def main(argv: list[str] | None = None) -> int:
     translations = [args.translation] if args.translation else ["kjv", "web"]
 
     store = VerseStore(path=args.chroma_path)
-    db = ChatDatabase(db_path=args.db_path)
-    try:
-        embedder = EmbeddingService(db_path=args.db_path, embed_fn=None)
-    except ValueError as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        return 2
+    embedder = EmbeddingService()
+    # Base is used purely for its structured logger shim (record_message).
+    base = BaseService()
 
     try:
         for slug in translations:
@@ -264,7 +266,7 @@ async def main(argv: list[str] | None = None) -> int:
                 slug,
                 store,
                 embedder,
-                db,
+                base,
                 max_batches=args.max_batches,
                 manifest=manifest,
             )
@@ -276,7 +278,6 @@ async def main(argv: list[str] | None = None) -> int:
         return 2
     finally:
         embedder.close()
-        db.close()
 
     return 0
 

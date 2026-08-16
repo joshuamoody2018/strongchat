@@ -3,12 +3,13 @@
 import asyncio  # noqa: ANYIO_OK
 import json
 import logging
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 from services.base import BaseService
 from services.llm.exceptions import LLMError
 
 logger = logging.getLogger(__name__)
+
 
 _HYDE_INTENT_FIELDS = (
     "intent_id",
@@ -27,14 +28,9 @@ class HydeService(BaseService):
     ) -> List[Dict[str, Any]]:
         """Generate a HyDE document for every intent.
 
-        Each intent is serialized to a bias-isolated JSON prompt containing only
-        the fields needed for HyDE generation. Calls are launched in parallel
-        via ``asyncio.gather``; failures are captured per intent. If every
-        intent fails, an ``LLMError`` is raised.
-
         Args:
             intents: List of intent dictionaries from ``IntentService``.
-            session_uuid: UUID of the parent session.
+            session_uuid: Log correlation id (no longer persisted).
 
         Returns:
             List of result dictionaries, each containing either a successful
@@ -44,10 +40,6 @@ class HydeService(BaseService):
         Raises:
             LLMError: If zero intents produced a successful HyDE document.
         """
-        # The shared LLMWrapper and its SQLite connection are safe under
-        # asyncio.gather: a single-threaded event loop serializes all DB
-        # writes, so concurrent _generate_one coroutines do not contend for the
-        # connection even though they share one wrapper instance.
         results = await asyncio.gather(
             *[self._generate_one(intent, session_uuid) for intent in intents],
             return_exceptions=True,
@@ -86,7 +78,7 @@ class HydeService(BaseService):
 
         Args:
             intent: A single intent dictionary.
-            session_uuid: UUID of the parent session.
+            session_uuid: Log correlation id (no longer persisted).
 
         Returns:
             Result dictionary with ``intent_id`` and either a successful

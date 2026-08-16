@@ -1,12 +1,93 @@
 # TODO - StrongChat Development Tasks
 
-## Next Steps Implementation
+## Active MCP pivot (`mcp` branch)
+
+### Phase A — Stateless MCP server (✅ DONE 2026-08-16)
+- [x] Strip the application DB (`sessions`, `messages`,
+  `ref_message_types` SQLite tables + `ChatDatabase` + `AsyncSQLiteDatabase`
+  + `DatabasePort` Protocol + adapter) and `scripts/create_new_database.py`.
+- [x] Replace `GlobalReferenceCache` + SQLite `ref_message_types` lookup with
+  an in-process registry of frozen dataclasses
+  (`src/config/llm_models.py` `MessageTypeDef` instances +
+  `src/config/registry.py` `MessageTypeDefRegistry`/`DEFAULT_REGISTRY`).
+- [x] Migrate audit trail from SQLite `messages` rows to JSONL log records
+  (`src/config/logging.py` + `concurrent-log-handler`; levels:
+  `ERROR`default / `INFO` / `DEBUG`.
+- [x] Update `LLMWrapper` / `BaseService` / `EmbeddingService` /
+  `ContextRetrievalService` / `PipelineRunner` to emit INFO + DEBUG
+  structured log records instead of writing SQLite rows. The `session_uuid`
+  parameter survives semantically as `correlation_id` (pure log-slicing
+  key, never persisted).
+- [x] Serialise `PipelineResult` to a JSON-safe bundle
+  (`src/services/pipeline/serializer.py:pipeline_result_to_bundle`)
+  dropping embedding vectors so the future `validate_answer` tool can
+  accept it back unchanged.
+- [x] MCP server entry point `src/server.py` (FastMCP stdio). Tool:
+  `retrieve_context(query, top_k=10, translations=["kjv","web"]) -> dict`.
+  Plus a `validate_answer(answer, context=<bundle>)` stub that raises
+  `NotImplementedError` with the documented planned return shape
+  (`{valid, unsupported_claims, missing_coverage, suggested_refinement}`)
+  to lock the contract in for the future agent harness.
+- [x] Repurpose `src/main.py` as a JSON-printing CLI smoke-test calling
+  the same `retrieve_context_impl` function the MCP server tool wraps.
+- [x] Update `scripts/setup_environment.sh` + `scripts/ingest_corpus.py`
+  to drop the `create_new_database.py` step and the `--db-path` flag.
+- [x] Update existing offline tests (`tests/scripts/test_*`):
+  - Drop every `CREATE TABLE sessions/ref_message_types/messages` fixture
+    DB and `GlobalReferenceCache.reset` setup
+  - Use `DEFAULT_REGISTRY` (or construct a fresh `MessageTypeDefRegistry`)
+    instead
+  - Replace `self.service.db.create_session(...)` with
+    `str(uuid.uuid4())` for the per-call correlation id
+  - Replace audit assertions on `self.service.db.cursor.execute(...)` with
+    `self.assertLogs("strongchat", level="INFO"/"DEBUG")` against the
+    structured log records.
+- [x] Update system tests (`tests/system/test_*`) to drop the audit_trail
+  on `messages` rows; replace with assertions against the returned bundle
+  (`pipeline_result_to_bundle(result)` carries the same intent + HyDE +
+  hit shape, minus embedded vectors and minus SQLite rows).
+- [x] Delete stale system tests `test_real_api.py`, `test_final_system.py`,
+  `test_json_api.py`, `test_refreshed_cache.py`, `test_intent.py`
+  (referenced removed `intent_classification` slug long pre-MCP).
+- [x] Rewrite `tests/test_integration.py` against the new registry +
+  bundle shape + caplog (was a top-level fixture-DB CRUD integration).
+- [x] New tests:
+  - `tests/scripts/test_mcp_server.py` —�单 invokes
+    `retrieve_context_impl` with a mocked runner; asserts the bundle
+    shape; asserts `validate_answer_impl` raises `NotImplementedError`
+    documenting the contract.
+  - `tests/scripts/test_logging.py` — `JsonFormatter` record shape,
+    level resolution, idempotent `configure_logging`, non-serializable
+    extra repr fallback.
+- [x] Update docs: `AGENTS.md`, `README.md`, `docs/high-level.md`,
+  `docs/database.md`, `docs/reference.md`, `docs/implementation-status.md`,
+  `docs/pipeline-hyde-retrieval.md`, `docs/pipeline-context-retrieval.md`,
+  `docs/llm-framework.md`, `docs/architecture-diagram.md` for the MCP
+  entry, statelessness, no-app-DB, JSONL audit, and the `validate_answer`
+  stub.
+
+### Phase B — `validate_answer` tool implementation (NEXT)
+- [ ] Implement the `validate_answer` body in `src/server.py`. The
+  contract is locked in:
+  - Input: `(answer: str, context: <bundle>)`
+  - Output: `{valid: bool, unsupported_claims: [...], missing_coverage: [...], suggested_refinement: str | null}`
+- [ ] Build the fact-check library: parse claim + citation references out
+  of the agent's `answer`, verify each against the per-intent traces'
+  `context_bundle` data in the provided `context` bundle.
+- [ ] Emit structured agent-actionable feedback so the calling agent can
+  decide whether to re-call `retrieve_context` with a refined query (or
+  re-synthesize using a stronger model, then re-validate).
+- [ ] Add tests (`tests/scripts/test_mcp_server.py` extension): one
+  passing + one failing case, mocked LLM underneath, `assertLogs` on
+  JSONL audit records.
+
+## Earlier parity work (pre-MCP, still relevant)
 
 ### Phase 1: Structured Response Framework ✅
 - [x] Create src/config/schemas.py with INTENT_GENERATION_SCHEMA
 - [x] Create src/config/prompts.py with INTENT_GENERATION_PROMPT
 - [x] Create src/services/llm/aimessage.py with strict JSON parsing
-- [x] Create src/services/llm/client.py with retry/backoff logic
+- [x] Create src/services/llm/wrapper.py with retry/backoff logic
 - [x] Create src/services/llm/exceptions.py for error handling
 - [x] Create src/services/llm/__init__.py and src/config/__init__.py
 
@@ -77,31 +158,24 @@
 - [x] Update docs (`pipeline-context-retrieval.md`, `architecture-diagram.md`,
       `README.md`, `high-level.md`)
 
-## Next steps
+## Next steps (post-MCP strip)
 
 ### Short Term
-- Fix stale online tests: 5 files in `tests/system/` (`test_intent.py`,
-  `test_json_api.py`, `test_real_api.py`, `test_refreshed_cache.py`,
-  `test_final_system.py`) reference the removed `intent_classification`
-  message-type slug (only `intent_generation` is seeded now). Either delete
-  them or rewrite them against the current `intent_generation` schema.
-- Fix `ContextRetrievalService` concurrency bug: a single shared
-  `sqlite3.connect(..., check_same_thread=False)` connection is touched by
-  parallel `asyncio.to_thread` calls without the declared `self._macula_lock`
-  being acquired anywhere. Causes intermittent `InterfaceError: bad parameter
-  or other API misuse` under live parallel intent processing.
-- ~~Hebrew OT Macula integration (architecture/high-level.md notes 'OT: TBD')~~ ✅ DONE (2026-08-16). See `docs/pipeline-context-retrieval.md` and the "Hebrew OT Macula integration" section above.
+- Implement `validate_answer` MCP tool (see Phase B above).
+- Add an end-to-end OT live test (`tests/system/test_context_retrieval_e2e_ot.py`)
+  once an OT ingest is operational on a CI host (the live `test_context_retrieval_e2e.py`
+  is currently NT-flavored).
 
 ### Medium Term
-- Implement RRF ranking (steps 5-6)
-- Implement response synthesis (step 10)
-- Add evaluator loop (step 11)
-- Add validator (step 12)
+- Implement RRF ranking (steps 5-6) as `src/services/rrf/`; wire between
+  RetrievalService.search and ContextRetrievalService.
+- Implement graph expansion (step 8) as `src/services/graph/`.
 
 ### Long Term
-- Complete full pipeline integration (steps 5-13)
-- Add production monitoring
-- Optimize performance and scalability
-- Evaluate DB layer: keep SQLite with per-task short-lived connections, or
-  migrate to a server-style DB (Postgres) once concurrent load demands it
-  (see notes below)
+- Implement synthesis (step 10) and evaluator loop (step 11) if the agent
+  harness / wrapper itself (your separate project) needs server-side hooks
+  rather than running the loop entirely in the agent's context window.
+- Evaluate production monitoring options (JSONL is the audit surface; add
+  aggregators if a hosted variant is built later).
+- Tag `dev` (`v0.1-classic-sqlite-audit`) once `mcp` stabilizes; let
+  `mcp` become the new default.

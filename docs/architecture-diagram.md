@@ -29,6 +29,12 @@ Each node encodes three axes at once:
 | `planned_data`     | rectangle grey, dashed | 📋 planned data step                       |
 | `data`             | rectangle grey | neutral data handoff (no status)                  |
 
+The audit sink is the JSONL log file under `data/logs/strongchat.log`
+(cross-process safe via `concurrent-log-handler`). There is no
+application database; the former `messages` SQLite-row audit edges are
+gone — every service emits INFO timing + DEBUG audit records to the
+JSONL sink instead.
+
 ---
 
 ## 1. Top-level 13-step pipeline
@@ -49,7 +55,7 @@ flowchart TD
     U[User query]:::data --> S2
 
     S2(["Intent Generation<br/>1 OpenRouter chat call<br/>LLM: llama-3.3-70b"]):::impl_llm --> S3
-    S2 -. records .-> M1[("messages row<br/>intent_generation")]:::impl_db
+    S2 -. INFO + DEBUG audit .-> LOG[("JSONL log<br/>data/logs/strongchat.log")]:::impl_data
 
     subgraph PAR_HYDE ["parallel — asyncio.gather over N intents"]
         direction TB
@@ -60,7 +66,7 @@ flowchart TD
     S3 --> S3a
     S3 --> S3b
     S3 --> S3c
-    S3a & S3b & S3c -. records .-> M2[("messages rows<br/>hyde_generation × N")]:::impl_db
+    S3a & S3b & S3c -. INFO + DEBUG audit .-> LOG
 
     subgraph PAR_RET ["parallel — one embed call + fan-out per doc × translation"]
         direction TB
@@ -71,7 +77,7 @@ flowchart TD
         S4e --> S4q2
     end
     S3a & S3b & S3c --> PAR_RET
-    PAR_RET -. records .-> M3[("messages row<br/>embedding_generation")]:::impl_db
+    PAR_RET -. INFO + DEBUG audit .-> LOG
 
     S5[/"RRF Level 1<br/>intra-intent rerank<br/>M result sets → 1 per intent"/]:::planned_compute --> S6
     S6[/"RRF Level 2<br/>cross-intent merge<br/>N lists → 1 candidate set"/]:::planned_compute --> S7
@@ -82,21 +88,21 @@ flowchart TD
         S7y["Macula lookup + scoring<br/>per intent"]:::impl_db
     end
     S6 --> PAR_CTX
-    PAR_CTX -. records .-> M4[("messages rows<br/>context_retrieval × intents")]:::impl_db
+    PAR_CTX -. INFO + DEBUG audit .-> LOG
 
     S8[/"Graph Expansion<br/>lemma / verse-graph traversal<br/>cross-references"/]:::planned_db --> S9
     S9[/"Re-rank / Organize<br/>consolidate 6-8 → structured retrieval set"/]:::impl_compute --> S10
 
     S10(["Synthesis<br/>frontier LLM<br/>answer + citations<br/>uses retrieval + original prompt"]):::planned_llm --> S11
-    S10 -. records .-> M5[("messages row<br/>synthesis")]:::planned_db
+    S10 -. INFO + DEBUG audit .-> LOG
 
     subgraph EVAL_LOOP ["iterative — loops back to step 2/3 if insufficient"]
         direction TB
         S11(["Evaluator<br/>fresh LLM completeness check"]):::planned_llm --> S12
         S12(["Validator<br/>programmatic + Bible-trained LLM<br/>fact-check, strip unsupported"]):::planned_llm
     end
-    S11 -. records .-> M6[("messages row<br/>evaluation")]:::planned_db
-    S12 -. records .-> M7[("messages row<br/>validation")]:::planned_db
+    S11 -. INFO + DEBUG audit .-> LOG
+    S12 -. INFO + DEBUG audit .-> LOG
     S11 -. insufficient .-> S3
     S12 --> S13
 
@@ -111,6 +117,9 @@ flowchart TD
 - Step 4 does **1 batched embedding API call**, then **parallel Chroma queries** over `(doc × translation)`.
 - Step 7 runs **one task per intent in parallel**, each doing the full Macula + scoring flow shown in detail below.
 - Steps 10–13 are **serial**, with step 11 forming a **conditional loop** back to HyDE generation.
+- Every implemented step emits INFO + DEBUG audit records to the JSONL log
+  (keyed by `correlation_id`); the audit sink replaces the former SQLite
+  `messages` rows.
 
 ---
 
@@ -130,7 +139,7 @@ flowchart TD
     IN["HyDE docs<br/>from step 3"]:::data --> E
 
     E(["Batch embed all valid HyDE docs<br/>1 API call<br/>chunk_size=256, retry/backoff"]):::impl_embed
-    E -. records .-> ME[("messages row<br/>embedding_generation")]:::impl_db
+    E -. INFO + DEBUG audit .-> LOG[("JSONL log")]:::impl_data
 
     subgraph PAR_QUERY ["parallel — asyncio.to_thread + gather over doc × translation"]
         direction TB
@@ -163,7 +172,7 @@ flowchart TD
             REF --> MAC --> POSF --> FREQ --> SENSE --> SCORE --> TRIM --> BUNDLE
         end
     end
-    PAR_CTX -. records .-> MC[("messages rows<br/>context_retrieval × intent")]:::impl_db
+    PAR_CTX -. INFO + DEBUG audit .-> LOG
 
     BUNDLE --> EXPAND[("Graph Expansion<br/>lemma / verse-graph cross-refs<br/>not yet implemented for either testament")]:::planned_db
     EXPAND --> ORG[/"Re-rank / Organize<br/>consolidate 6-8 into retrieval set"/]:::impl_compute
@@ -174,6 +183,6 @@ flowchart TD
 
 - The single shared `EmbeddingService.embed_texts` call batches all valid HyDE docs in **one** API request; the fan-out to ChromaDB collections happens after.
 - Inside `PAR_CTX`, each intent runs **in parallel** with the others; within an intent, the **per-hit** sub-pipeline is **serial** (synchronous lookups / scoring on each verse).
-- All lookups after the embedding API call are **local** (SQLite + ChromaDB); the only remote call in this half is the embedding request at the top.
+- All lookups after the embedding API call are **local** (SQLite + ChromaDB — read-only data assets); the only remote call in this half is the embedding request at the top.
 - The scoring formula and `top-20%` trim rule live in `src/config/context_constants.py` and `src/services/context/service.py`.
 - `Graph Expansion` (step 8) is the only step in this half that is still **planned**; the rest of the retrieval detail is implemented.
