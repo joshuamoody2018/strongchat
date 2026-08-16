@@ -5,6 +5,13 @@ that's in `todo.md`. Not a deployment runbook — that's in
 `deploy/README.md`. This file is for "where is X" and "what
 conventions do I follow" only.
 
+## Refactoring
+Prefer JetBrains MCP structural refactor tools (rename, extract method/variable,
+safe delete, move) over raw find/replace or file edits whenever the change is a
+symbol-level rename, signature change, or extraction — these are AST-aware and
+update all call sites/imports. Use plain text edits only for non-semantic changes
+(comments, formatting, string literals, config files).
+
 ## Operational conventions
 
 - Use `.venv/bin/python` for everything.
@@ -12,6 +19,7 @@ conventions do I follow" only.
   env. Offline tests use a dummy key and run without network.
 - Test queries must NOT be biblical/faith-specific — the system is
   general-purpose input → biblically-backed output.
+- updates to todo.md are always only items that are left to do, or the minimal list of items that have been completed in order to provide enough context to move to the next items in todo. edits to the todo.md file should always evaluate it's relevance and remove slop/old items.
 
 ## Code Structure
 
