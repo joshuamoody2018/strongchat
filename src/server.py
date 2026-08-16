@@ -225,32 +225,87 @@ async def _setup_and_build_mcp():
     # OpenRouter LLM key only (so a developer can `unset` it on a box
     # with a populated .env to exercise the no-API-key code path).
     #
-    # NOTE: STRONGCHAT_API_KEY (bearer secret for the public MCP
-    # endpoint, see auth.py) and STRONGCHAT_PUBLIC_URL are NOT
-    # preserve-unset here — they MUST load from .env in production
-    # (where the server is typically launched with no env in the
-    # shell, e.g. via systemd `EnvironmentFile=.env`). Test isolation
-    # for the auth tests instead relies on a clean .env in CI; on a
-    # post-bootstrap dev box the http auth tests can fail locally
-    # (load_dotenv re-injects the keys the test popped). That is
-    # pre-existing test-environment fragility, not a code bug.
-    had_api_key = "OPENROUTER_STRONGCHAT_DEFAULT_API_KEY" in os.environ
+    # Same preserve-unset treatment for STRONGCHAT_API_KEY,
+    # STRONGCHAT_PUBLIC_URL, and STRONGCHAT_OAUTH_SIGNING_KEY: tests
+    # that exercise the "no auth" / "OAuth disabled" paths pop these
+    # keys before calling _setup_and_build_mcp; load_dotenv would
+    # otherwise re-inject them from .env on a bootstrapped box and
+    # silently turn the auth machinery back on (the no-auth HTTP
+    # round-trip and the unauthenticated mcp.client SDK handshake both
+    # then fail with a spurious 401). Tests that WANT auth set the
+    # variables after popping them, so re-injection of an UNSET value
+    # was the only safe direction.
+    #
+    # Production: when launched via systemd `EnvironmentFile=.env` the
+    # shell already has the values and ``had_* == True`` so load_dotenv
+    # is a no-op for those keys — production behaviour is unchanged.
+    _PRESERVE_UNSET = (
+        "OPENROUTER_STRONGCHAT_DEFAULT_API_KEY",
+        "STRONGCHAT_API_KEY",
+        "STRONGCHAT_PUBLIC_URL",
+        "STRONGCHAT_OAUTH_SIGNING_KEY",
+        "STRONGCHAT_OAUTH_CLIENT_ID",
+        "STRONGCHAT_OAUTH_CLIENT_SECRET",
+    )
+    had = {k: k in os.environ for k in _PRESERVE_UNSET}
     load_dotenv()
-    if not had_api_key and "OPENROUTER_STRONGCHAT_DEFAULT_API_KEY" in os.environ:
-        del os.environ["OPENROUTER_STRONGCHAT_DEFAULT_API_KEY"]
+    for k in _PRESERVE_UNSET:
+        if not had[k] and k in os.environ:
+            del os.environ[k]
 
     configure_logging()
 
-    # Auth: if STRONGCHAT_API_KEY + STRONGCHAT_PUBLIC_URL are both set in
-    # env, wire the MCP SDK's bearer-token verifier into the server. The
-    # public endpoint will return 401 to any request missing a matching
-    # ``Authorization: Bearer <key>`` header. When both env vars are
-    # unset (default), the server runs unauthenticated (stdio + local
-    # HTTP). Anything in between (only one of the two set) logs a
-    # WARNING and falls back to unauthenticated so misconfiguration is
-    # LOUD but never silently leaves a public endpoint open.
+    # Auth wiring — pick exactly ONE of three exclusive modes:
+    #
+    #   1. OAuth 2.0 PKCE authorization-server provider (claude.ai web
+    #      custom-connector). When BOTH ``STRONGCHAT_OAUTH_SIGNING_KEY``
+    #      AND ``STRONGCHAT_PUBLIC_URL`` are set in env, the SDK's
+    #      ``OAuthAuthorizationServerProvider`` plug-in is wired and the
+    #      SDK auto-mounts ``/.well-known/oauth-authorization-server``,
+    #      ``/authorize``, ``/token``, ``/register``, ``/revoke`` on the
+    #      same Starlette app as ``/mcp``. The SDK auto-wraps the provider
+    #      with ``ProviderTokenVerifier`` so incoming bearer tokens are
+    #      verified via ``StrongChatOAuthProvider.load_access_token`` (a
+    #      JWT decode of the per-deploy signing key — distinct from the
+    #      static bearer key).
+    #
+    #   2. Static-API-key bearer (opencode / Claude Desktop / curl). When
+    #      only ``STRONGCHAT_API_KEY`` + ``STRONGCHAT_PUBLIC_URL`` are
+    #      set, the static ``StaticBearerTokenVerifier`` from
+    #      ``src/auth.py`` is wired. ``BearerAuthBackend`` returns 401 on
+    #      missing/malformed/wrong bearer.
+    #
+    #   3. No auth (default stdio / local-only HTTP). When neither pair
+    #      is set, the server is open.
+    #
+    # IMPORTANT: the installed MCP SDK (verified against
+    # ``mcp/server/mcpserver/server.py:237-238``) rejects passing BOTH
+    # ``auth_server_provider=`` and ``token_verifier=`` to
+    # ``MCPServer.__init__`` with ``ValueError("Cannot specify both
+    # auth_server_provider and token_verifier")``. The OAuth signing-key
+    # path therefore TAKES PRECEDENCE over the static bearer when both
+    # env pairs are set (the static bearer remains available as the
+    # fallback when OAuth is not configured). Switching a deploy between
+    # the two is a pure .env / env-var change.
+    #
+    # Mismatch (only one var of a pair set) for either mode logs a
+    # WARNING and disables that mode so misconfiguration is LOUD but
+    # never silently leaves a public endpoint open.
+
     from auth import load_static_bearer_config
+    from oauth import load_oauth_config
+
+    oauth_auth_settings, oauth_provider = load_oauth_config()
     auth_settings, token_verifier = load_static_bearer_config()
+
+    if oauth_provider is not None:
+        # OAuth signing-key path is configured — wire it exclusively and
+        # drop the static bearer (the SDK forbids passing both).
+        auth_settings = oauth_auth_settings
+        token_verifier = None
+        auth_server_provider = oauth_provider
+    else:
+        auth_server_provider = None
 
     try:
         from mcp.server.mcpserver import MCPServer
@@ -283,6 +338,7 @@ async def _setup_and_build_mcp():
         ),
         auth=auth_settings,
         token_verifier=token_verifier,
+        auth_server_provider=auth_server_provider,
     )
 
     def _make_progress_callback(ctx):
