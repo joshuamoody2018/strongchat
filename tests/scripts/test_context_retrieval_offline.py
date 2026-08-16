@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-if not os.getenv("OPENROUTER_API_KEY"):
+if not os.getenv("OPENROUTER_STRONGCHAT_DEFAULT_API_KEY"):
     os.environ["OPENROUTER_API_KEY"] = "dummy_key_for_offline_tests"
 
 from services.pipeline.runner import PipelineRunner

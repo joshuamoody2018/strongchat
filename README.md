@@ -44,7 +44,7 @@ scripts/          Setup, utility, and pipeline scripts
   setup_environment.sh    Bootstrap Python environment and ingest read-only assets
   ingest_corpus.py        Ingest Bible corpus into ChromaDB
 tests/            Test suites
-  system/         System/integration tests (need OPENROUTER_API_KEY)
+  system/         System/integration tests (need OPENROUTER_STRONGCHAT_DEFAULT_API_KEY)
   scripts/        Script-style offline tests (dummy key)
 data/             Read-only data assets
   chroma/         ChromaDB persistent verse vectors (kjv_verses, web_verses)
@@ -77,7 +77,7 @@ Then create a `.env` file in the project root with at least your OpenRouter
 API key:
 
 ```bash
-OPENROUTER_API_KEY="sk-or-..."
+OPENROUTER_STRONGCHAT_DEFAULT_API_KEY="sk-or-..."
 ```
 
 Optional logging configuration:
@@ -156,7 +156,7 @@ Offline script-style tests (no network, dummy API key):
 .venv/bin/python tests/scripts/test_logging.py
 ```
 
-Live system tests (need `OPENROUTER_API_KEY` and a fully ingested corpus):
+Live system tests (need `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` and a fully ingested corpus):
 
 ```bash
 set -a; . ./.env; set +a

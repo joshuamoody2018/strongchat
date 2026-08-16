@@ -243,8 +243,8 @@ async def main(argv: list[str] | None = None) -> int:
 
     load_dotenv()
     configure_logging()
-    if not os.getenv("OPENROUTER_API_KEY"):
-        print("ERROR: OPENROUTER_API_KEY not configured", file=sys.stderr)
+    if not os.getenv("OPENROUTER_STRONGCHAT_DEFAULT_API_KEY"):
+        print("ERROR: OPENROUTER_STRONGCHAT_DEFAULT_API_KEY not configured", file=sys.stderr)
         return 1
 
     try:

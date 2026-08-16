@@ -35,7 +35,7 @@ REFERENCE_RE = re.compile(r'^(?:\w+\s)+\d+:\d+$')
 def _check_skip_conditions() -> tuple[bool, str]:
     """Check if we should skip the test and return (should_skip, reason)."""
     load_dotenv()
-    api_key = os.getenv('OPENROUTER_API_KEY')
+    api_key = os.getenv('OPENROUTER_STRONGCHAT_DEFAULT_API_KEY')
     if not api_key or api_key == 'your_openrouter_api_key_here':
         return True, "SKIP: OPENROUTER_API_KEY is not present in the environment."
 

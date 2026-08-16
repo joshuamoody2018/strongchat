@@ -23,7 +23,7 @@ import uuid
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
-os.environ.setdefault('OPENROUTER_API_KEY', 'dummy_key_for_offline_hebrew_tests')
+os.environ.setdefault('OPENROUTER_STRONGCHAT_DEFAULT_API_KEY', 'dummy_key_for_offline_hebrew_tests')
 
 from services.context.service import ContextRetrievalService  # noqa: E402
 from services.pipeline.runner import PipelineResult, IntentTrace  # noqa: E402

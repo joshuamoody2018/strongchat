@@ -248,7 +248,7 @@ Offline script-style tests (no network, dummy key):
 .venv/bin/python tests/scripts/test_logging.py
 ```
 
-Live system tests (require `OPENROUTER_API_KEY` and an ingested corpus):
+Live system tests (require `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` and an ingested corpus):
 
 ```bash
 .venv/bin/python tests/system/test_intent_generation.py

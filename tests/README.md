@@ -13,7 +13,7 @@ Focus on the complete database-driven LLM message system workflow, testing how c
 Standalone script-style tests that exercise services and components directly. These are not pytest tests and should be run as individual scripts.
 
 ### System Tests (`tests/system/`)
-Focus on individual components and specific scenarios, providing more granular testing of system parts and edge cases. Many require a live `OPENROUTER_API_KEY`.
+Focus on individual components and specific scenarios, providing more granular testing of system parts and edge cases. Many require a live `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY`.
 
 ## Test Philosophy
 
@@ -84,7 +84,7 @@ This project does not use pytest. Run tests directly with Python or via `unittes
 .venv/bin/python tests/scripts/test_intent_service.py
 .venv/bin/python tests/scripts/test_pipeline_offline.py
 
-# Run live system tests with OPENROUTER_API_KEY in the environment
+# Run live system tests with OPENROUTER_STRONGCHAT_DEFAULT_API_KEY in the environment
 set -a; . ./.env; set +a
 .venv/bin/python tests/system/test_intent_generation.py
 .venv/bin/python tests/system/test_hyde_generation.py

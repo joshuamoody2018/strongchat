@@ -40,7 +40,7 @@
 #                                   python-dotenv. Contains
 #                                   STRONGCHAT_API_KEY +
 #                                   STRONGCHAT_PUBLIC_URL next to your
-#                                   existing OPENROUTER_API_KEY etc.
+#                                   existing OPENROUTER_STRONGCHAT_DEFAULT_API_KEY etc.
 #                                   (.env is gitignored, never committed.)
 #
 # Usage:

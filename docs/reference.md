@@ -136,7 +136,7 @@ docs/
    tests do not require either ChromaDB or macula_index.db)
 2. Run offline tests with a dummy key:
    `.venv/bin/python tests/scripts/test_*` (no network)
-3. Live system tests need `OPENROUTER_API_KEY` + ingested corpus:
+3. Live system tests need `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` + ingested corpus:
    `.venv/bin/python tests/system/test_*`
 4. Top-level cross-service integration test:
    `.venv/bin/python -m unittest tests.test_integration`
@@ -146,7 +146,7 @@ docs/
 ### Environment Setup
 ```bash
 # Required
-export OPENROUTER_API_KEY=your_api_key_here
+export OPENROUTER_STRONGCHAT_DEFAULT_API_KEY=your_api_key_here
 
 # Optional logging
 export STRONGCHAT_LOG_LEVEL=ERROR        # default if unset; INFO or DEBUG

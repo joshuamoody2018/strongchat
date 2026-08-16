@@ -49,8 +49,8 @@ class LLMWrapper:
 
     def _setup_api_config(self) -> None:
         """Set up API configuration from environment."""
-        self.api_key = os.getenv("OPENROUTER_API_KEY")
-        if not self.api_key or self.api_key == "your_openrouter_api_key_here":
+        self.api_key = os.getenv("OPENROUTER_STRONGCHAT_DEFAULT_API_KEY")
+        if not self.api_key or self.api_key == "your_OPENROUTER_STRONGCHAT_DEFAULT_API_KEY_here":
             raise ConfigurationError("OpenRouter API key not configured")
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",

@@ -15,7 +15,7 @@ handshake over its stdin/stdout pipes:
        tool was actually invoked end-to-end through the stdio transport).
 
 Step 4 specifically tests the stub offline: it doesn't need
-``OPENROUTER_API_KEY`` or an ingested ChromaDB because
+``OPENROUTER_STRONGCHAT_DEFAULT_API_KEY`` or an ingested ChromaDB because
 ``validate_answer_impl`` raises before anything else runs.
 
 ``retrieve_context`` itself is NOT invoked here because doing so would
@@ -109,7 +109,7 @@ async def run_tests() -> bool:
     # validate_answer stub doesn't need a real key, but the LLMWrapper
     # constructor at import time checks for one. Set a dummy to let the
     # module finish importing.
-    env.setdefault("OPENROUTER_API_KEY", "dummy-key-for-mcp-stdio-test")
+    env.setdefault("OPENROUTER_STRONGCHAT_DEFAULT_API_KEY", "dummy-key-for-mcp-stdio-test")
     # Default log level ERROR keeps stdout clean of non-RPC noise.
     env.setdefault("STRONGCHAT_LOG_LEVEL", "ERROR")
 

@@ -120,9 +120,9 @@ async def run_tests() -> bool:
     print("=== Live Pipeline End-to-End Integration Test ===\n")
 
     load_dotenv()
-    api_key = os.getenv('OPENROUTER_API_KEY')
+    api_key = os.getenv('OPENROUTER_STRONGCHAT_DEFAULT_API_KEY')
     if not api_key or api_key == 'your_openrouter_api_key_here':
-        print("SKIP: OPENROUTER_API_KEY is not present in the environment.")
+        print("SKIP: OPENROUTER_STRONGCHAT_DEFAULT_API_KEY is not present in the environment.")
         return True
 
     ok, reason = _collection_counts_ok()

@@ -28,9 +28,9 @@ async def run_tests() -> bool:
     """Run the live HyDE generation system test."""
     print("=== Live HyDE Generation System Test ===\n")
     load_dotenv()
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    if not api_key or api_key == "your_openrouter_api_key_here":
-        print("SKIP: OPENROUTER_API_KEY is not present in the environment.")
+    api_key = os.getenv("OPENROUTER_STRONGCHAT_DEFAULT_API_KEY")
+    if not api_key or api_key == "your_OPENROUTER_STRONGCHAT_DEFAULT_API_KEY_here":
+        print("SKIP: OPENROUTER_STRONGCHAT_DEFAULT_API_KEY is not present in the environment.")
         return True
 
     configure_logging()

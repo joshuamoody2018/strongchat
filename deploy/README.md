@@ -48,7 +48,7 @@ the claude.ai web OAuth caveat + production hardening is below.
 | Location | What | How to read it |
 |---|---|---|
 | `~/.strongchat_api_key` | the bearer API key (chmod 600) | `cat ~/.strongchat_api_key` |
-| `.env` (repo root, gitignored) | `STRONGCHAT_API_KEY` + `STRONGCHAT_PUBLIC_URL` next to your `OPENROUTER_API_KEY` | `grep STRONGCHAT .env` |
+| `.env` (repo root, gitignored) | `STRONGCHAT_API_KEY` + `STRONGCHAT_PUBLIC_URL` next to your `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` | `grep STRONGCHAT .env` |
 | Caddy's cert storage (`/var/lib/caddy` by default) | Let's Encrypt cert for the sslip.io hostname | managed automatically by Caddy; no manual handling |
 
 To paste the key into opencode / Claude Desktop / any client config:

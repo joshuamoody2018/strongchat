@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Offline tests for RetrievalService.
 
-Runs without OPENROUTER_API_KEY by injecting deterministic embedding
+Runs without OPENROUTER_STRONGCHAT_DEFAULT_API_KEY by injecting deterministic embedding
 functions and querying temp Chroma collections. Verifies that HyDE
 documents are embedded once, queried in parallel across translations,
 and returned as structured, sorted hits. Audit assertions use the standard
@@ -22,8 +22,8 @@ import uuid
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 sys.path.insert(0, os.path.dirname(__file__))
 
-if not os.getenv("OPENROUTER_API_KEY"):
-    os.environ["OPENROUTER_API_KEY"] = "dummy-key-for-offline-tests"
+if not os.getenv("OPENROUTER_STRONGCHAT_DEFAULT_API_KEY"):
+    os.environ["OPENROUTER_STRONGCHAT_DEFAULT_API_KEY"] = "dummy-key-for-offline-tests"
 
 from services.embeddings import EmbeddingService
 from services.retrieval import RetrievalService

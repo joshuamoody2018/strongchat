@@ -219,12 +219,12 @@ async def _setup_and_build_mcp():
     Pulled out of _main so it doesn't need to be async-then-sync-then-async
     again.
     """
-    # Load .env so OPENROUTER_API_KEY etc. are available; preserve an
+    # Load .env so OPENROUTER_STRONGCHAT_DEFAULT_API_KEY etc. are available; preserve an
     # explicitly-unset key in the parent shell (matches src/main.py behaviour).
-    had_api_key = "OPENROUTER_API_KEY" in os.environ
+    had_api_key = "OPENROUTER_STRONGCHAT_DEFAULT_API_KEY" in os.environ
     load_dotenv()
-    if not had_api_key and "OPENROUTER_API_KEY" in os.environ:
-        del os.environ["OPENROUTER_API_KEY"]
+    if not had_api_key and "OPENROUTER_STRONGCHAT_DEFAULT_API_KEY" in os.environ:
+        del os.environ["OPENROUTER_STRONGCHAT_DEFAULT_API_KEY"]
 
     configure_logging()
 
@@ -414,6 +414,65 @@ def _select_transport() -> tuple[str, str, int]:
     return transport, host, port
 
 
+def _build_transport_security(host: str) -> "object | None":
+    """When auth is enabled and a public URL is configured, allow the
+    public hostname through the MCP SDK's DNS-rebinding protection.
+
+    The SDK auto-enables DNS-rebinding protection when binding to a
+    loopback address, and only allows ``Host: localhost`` / ``Host:
+    127.0.0.1`` by default. When a reverse proxy (Caddy / nginx) forwards
+    the public hostname (e.g. ``66-94-111-95.sslip.io``), the SDK rejects
+    it with ``421 Misdirected Request`` ("Invalid Host header"). This
+    helper parses ``STRONGCHAT_PUBLIC_URL`` and adds its hostname to the
+    allowlist so proxied requests succeed.
+
+    Returns ``None`` when no public URL is configured (local-only dev
+    keeps the SDK's loopback-only defaults).
+    """
+    public_url = os.environ.get("STRONGCHAT_PUBLIC_URL", "").strip()
+    if not public_url:
+        return None
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(public_url)
+        public_host = parsed.hostname
+        if not public_host:
+            return None
+    except Exception:
+        return None
+    try:
+        from mcp.server.transport_security import TransportSecuritySettings
+    except ImportError:
+        return None  # pragma: no cover - pre-v2 SDK
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        # Allow the public hostname in ALL forms Caddy might forward:
+        #   - bare hostname (e.g. "66-94-111-95.sslip.io" — Caddy strips
+        #     the default :443 port)
+        #   - hostname:port (e.g. "66-94-111-95.sslip.io:443" — some
+        #     proxies preserve it)
+        #   - hostname:* (wildcard — any non-default port)
+        # Plus keep the loopback defaults so direct local access works.
+        allowed_hosts=[
+            public_host,
+            f"{public_host}:*",
+            "localhost",
+            "localhost:*",
+            "127.0.0.1",
+            "127.0.0.1:*",
+            "[::1]",
+            "[::1]:*",
+        ],
+        allowed_origins=[
+            f"https://{public_host}",
+            "http://localhost",
+            "http://localhost:*",
+            "http://127.0.0.1",
+            "http://127.0.0.1:*",
+        ],
+    )
+
+
 def main() -> int:
     """Run the MCP server (stdio by default; streamable-http on request).
 
@@ -427,13 +486,23 @@ def main() -> int:
         return 1
 
     if transport == "http":
+        # When behind a reverse proxy (Caddy), allow the public hostname
+        # through the SDK's DNS-rebinding protection so proxied requests
+        # aren't rejected with 421. No-op for local-only dev.
+        transport_security = _build_transport_security(host)
+
         # mcp v2.x: run(transport="streamable-http", host=, port=) wraps anyio
         # + uvicorn internally. Older v1.x signatures raised TypeError on the
         # extra kwargs; we fall back to streamable_http_app + a direct
         # uvicorn serve for those.
         if hasattr(mcp, "run"):
             try:
-                mcp.run(transport="streamable-http", host=host, port=port)
+                mcp.run(
+                    transport="streamable-http",
+                    host=host,
+                    port=port,
+                    transport_security=transport_security,
+                )
                 return 0
             except TypeError:
                 pass  # fall through to manual uvicorn wiring
@@ -454,7 +523,7 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
-        app = mcp.streamable_http_app()
+        app = mcp.streamable_http_app(transport_security=transport_security)
         uvicorn.run(app, host=host, port=port)
         return 0
 

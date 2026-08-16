@@ -144,7 +144,7 @@ asyncio.run(main())
 ### Environment Variables
 
 ```bash
-OPENROUTER_API_KEY=your_api_key_here
+OPENROUTER_STRONGCHAT_DEFAULT_API_KEY=your_api_key_here
 
 # Optional logging knobs
 STRONGCHAT_LOG_LEVEL=ERROR            # default if unset; INFO or DEBUG
@@ -311,7 +311,7 @@ concurrent-log-handler
 ### Environment Setup
 
 ```bash
-export OPENROUTER_API_KEY=your_api_key_here
+export OPENROUTER_STRONGCHAT_DEFAULT_API_KEY=your_api_key_here
 # Optional logging:
 export STRONGCHAT_LOG_LEVEL=ERROR  # default if unset; INFO or DEBUG
 ```
@@ -322,7 +322,7 @@ export STRONGCHAT_LOG_LEVEL=ERROR  # default if unset; INFO or DEBUG
    ```
    ConfigurationError: OpenRouter API key not configured
    ```
-   Solution: Set `OPENROUTER_API_KEY` environment variable.
+   Solution: Set `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` environment variable.
 
 2. **JSON Parsing Errors**
    ```

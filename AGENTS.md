@@ -73,7 +73,7 @@ contract).
 ## Project operational conventions
 
 - Use `.venv/bin/python` for everything.
-- Live (system) tests need `OPENROUTER_API_KEY` in env. Offline tests
+- Live (system) tests need `OPENROUTER_STRONGCHAT_DEFAULT_API_KEY` in env. Offline tests
   use a dummy key and run without network. Test queries must NOT be
   biblical/faith-specific (the system is general-purpose input →
   biblically-backed output).

@@ -237,7 +237,7 @@ class TestLLMWrapperRetry(unittest.TestCase):
 
     def setUp(self):
         """Create a wrapper instance with a dummy API key."""
-        os.environ["OPENROUTER_API_KEY"] = "dummy-key-for-offline-tests"
+        os.environ["OPENROUTER_STRONGCHAT_DEFAULT_API_KEY"] = "dummy-key-for-offline-tests"
         self.wrapper = LLMWrapper()
         self.correlation_id = str(uuid.uuid4())
 
@@ -338,7 +338,7 @@ class TestEmbeddingServiceRetry(unittest.TestCase):
 
     def test_retry_two_failures_then_success(self):
         """Two injected failures followed by success returns correct vectors."""
-        os.environ["OPENROUTER_API_KEY"] = "dummy-key-for-offline-tests"
+        os.environ["OPENROUTER_STRONGCHAT_DEFAULT_API_KEY"] = "dummy-key-for-offline-tests"
         state = {"calls": 0}
 
         def embed_fn(texts: list[str]) -> list[list[float]]:
@@ -366,7 +366,7 @@ class TestHydePartialFailure(unittest.TestCase):
 
     def setUp(self):
         """Create a HydeService instance."""
-        os.environ["OPENROUTER_API_KEY"] = "dummy-key-for-offline-tests"
+        os.environ["OPENROUTER_STRONGCHAT_DEFAULT_API_KEY"] = "dummy-key-for-offline-tests"
         self.service = HydeService()
         self.correlation_id = str(uuid.uuid4())
 

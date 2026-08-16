@@ -71,7 +71,7 @@ class TestHydeService(unittest.TestCase):
 
     def setUp(self):
         """Provide a dummy API key so LLMWrapper initializes offline."""
-        os.environ['OPENROUTER_API_KEY'] = 'dummy_key_for_offline_tests'
+        os.environ['OPENROUTER_STRONGCHAT_DEFAULT_API_KEY'] = 'dummy_key_for_offline_tests'
         self.service = HydeService()
 
     def test_partial_failure_returns_one_doc_and_one_error(self):
