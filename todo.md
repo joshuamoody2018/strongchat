@@ -22,12 +22,19 @@
   (`src/services/pipeline/serializer.py:pipeline_result_to_bundle`)
   dropping embedding vectors so the future `validate_answer` tool can
   accept it back unchanged.
-- [x] MCP server entry point `src/server.py` (FastMCP stdio). Tool:
+- [x] MCP server entry point `src/server.py` (`MCPServer` from mcp v2.x,
+  falling back to v1.x `FastMCP`). Tool:
   `retrieve_context(query, top_k=10, translations=["kjv","web"]) -> dict`.
   Plus a `validate_answer(answer, context=<bundle>)` stub that raises
   `NotImplementedError` with the documented planned return shape
   (`{valid, unsupported_claims, missing_coverage, suggested_refinement}`)
   to lock the contract in for the future agent harness.
+- [x] Live stdio round-trip test
+  (`tests/system/test_mcp_server_stdio.py`): spawns the server as a
+  subprocess and drives the actual JSON-RPC handshake
+  (initialize -> notifications/initialized -> tools/list -> tools/call
+  validate_answer). ERROR-level audit records also directly exercised to
+  disk now (`tests/scripts/test_logging.py`).
 - [x] Repurpose `src/main.py` as a JSON-printing CLI smoke-test calling
   the same `retrieve_context_impl` function the MCP server tool wraps.
 - [x] Update `scripts/setup_environment.sh` + `scripts/ingest_corpus.py`
