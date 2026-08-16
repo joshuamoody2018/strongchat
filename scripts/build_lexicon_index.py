@@ -106,12 +106,32 @@ def parse_tsv_content(content, expected_columns):
     # a single 'eStrong' column regardless of testament.
     header = [c.rstrip('#') for c in header]
 
-    # Find the start of data (after a row of '=====' separators)
+    # Find the start of data. Greek STEPBible lexicons emit a row of
+    # '=====' separators between the header and the data; Hebrew TBESH
+    # does not, so we fall back to "first non-empty line after the
+    # header that has enough columns to be a real row".
     data_start = None
     for i in range(header_line_idx + 1, len(lines)):
         if "===============================================================================" in lines[i]:
             data_start = i + 1
             break
+
+    if data_start is None:
+        # Fallback: Hebrew TBESH layout. The data immediately follows the
+        # header (optionally separated by an empty line). Accept the first
+        # non-empty line whose tab-split column count matches the header.
+        for i in range(header_line_idx + 1, len(lines)):
+            candidate = lines[i].strip()
+            if not candidate:
+                continue
+            if candidate.startswith('$'):
+                continue
+            # Skip stray prose '=====' markers (already handled above; if we
+            # reached here they were filtered).
+            cells = [c.strip() for c in candidate.split('\t')]
+            if len(cells) >= len(header):
+                data_start = i
+                break
 
     if data_start is None:
         raise ValueError("Could not find data start marker in file")
@@ -348,7 +368,16 @@ def main():
     # this a re-run after a normalization change would leave stale rows behind
     # (e.g. old 'G0976' rows alongside new '976' rows). The lexicon TSVs are
     # the canonical source of truth and are fully re-ingested every run.
-    conn.execute("DELETE FROM lexicon_definitions")
+    if ingest_greek and ingest_hebrew:
+        conn.execute("DELETE FROM lexicon_definitions")
+    elif ingest_greek:
+        conn.execute(
+            "DELETE FROM lexicon_definitions WHERE lexicon_source IN ('tbESG', 'lsj')"
+        )
+    elif ingest_hebrew:
+        conn.execute(
+            "DELETE FROM lexicon_definitions WHERE lexicon_source = 'tbESH'"
+        )
 
     def _load_local_or_url(local_path, url, timeout, label):
         if local_path:

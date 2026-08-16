@@ -23,19 +23,32 @@ from config.context_constants import (  # noqa: E402
 # --- Hebrew POS categories ---
 
 def test_hebrew_pos_weights_categories():
-    """Test that high- and low-weight HAM categories are present."""
-    # High-weight content words
-    assert 'verb' in POS_WEIGHTS_HEBREW, "Hebrew verb category missing"
-    assert 'subs' in POS_WEIGHTS_HEBREW, "Hebrew substantive (noun) category missing"
-    assert 'nmpr' in POS_WEIGHTS_HEBREW, "Hebrew proper-noun category missing"
-    assert 'adjv' in POS_WEIGHTS_HEBREW, "Hebrew adjective category missing"
+    """Test that high- and low-weight HAM categories are present.
 
-    # Low-weight function words
-    assert 'artc' in POS_WEIGHTS_HEBREW, "Hebrew article category missing"
-    assert 'conj' in POS_WEIGHTS_HEBREW, "Hebrew conjunction category missing"
-    assert 'prep' in POS_WEIGHTS_HEBREW, "Hebrew preposition category missing"
-    assert 'advb' in POS_WEIGHTS_HEBREW, "Hebrew adverb category missing"
-    assert 'prps' in POS_WEIGHTS_HEBREW, "Hebrew personal pronoun category missing"
+    Asserts BOTH the actual Macula-Hebrew TSV `pos` full-word forms
+    ('noun', 'verb', ...) AND defensive HAM trigram aliases ('subs',
+    'nmpr', ...) so the table is robust to upstream schema variations.
+    """
+    # High-weight content words (Macula-Hebrew full-English-word forms)
+    assert 'verb' in POS_WEIGHTS_HEBREW, "Hebrew verb category missing"
+    assert 'noun' in POS_WEIGHTS_HEBREW, "Hebrew noun category missing"
+    assert 'proper noun' in POS_WEIGHTS_HEBREW, "Hebrew proper-noun category missing"
+    assert 'adjective' in POS_WEIGHTS_HEBREW, "Hebrew adjective category missing"
+
+    # Low-weight function words (Macula-Hebrew full-English-word forms)
+    assert 'article' in POS_WEIGHTS_HEBREW, "Hebrew article category missing"
+    assert 'conjunction' in POS_WEIGHTS_HEBREW, "Hebrew conjunction category missing"
+    assert 'preposition' in POS_WEIGHTS_HEBREW, "Hebrew preposition category missing"
+    assert 'adverb' in POS_WEIGHTS_HEBREW, "Hebrew adverb category missing"
+    assert 'pronoun' in POS_WEIGHTS_HEBREW, "Hebrew pronoun category missing"
+    assert 'suffix' in POS_WEIGHTS_HEBREW, "Hebrew suffix category missing"
+
+    # HAM trigram aliases (defensive — covers alternate upstream shape)
+    assert 'subs' in POS_WEIGHTS_HEBREW, "HAM subs alias missing"
+    assert 'nmpr' in POS_WEIGHTS_HEBREW, "HAM nmpr alias missing"
+    assert 'artc' in POS_WEIGHTS_HEBREW, "HAM artc alias missing"
+    assert 'conj' in POS_WEIGHTS_HEBREW, "HAM conj alias missing"
+    assert 'prep' in POS_WEIGHTS_HEBREW, "HAM prep alias missing"
 
 
 def test_hebrew_weights_bounded():
@@ -94,9 +107,7 @@ def test_hebrew_path_smoke_composite_score():
 def test_hebrew_verb_dominates_particle():
     """Verb (0.95) dominates particle (low weight), paralleling Greek test_pos_dominance."""
     high = composite_score(POS_WEIGHTS_HEBREW['verb'], 100, 5)
-    low = composite_score(POS_WEIGHTS_HEBREW['part'] if 'part' in POS_WEIGHTS_HEBREW
-                          else POS_WEIGHTS_HEBREW['conj'],
-                          100, 5)
+    low = composite_score(POS_WEIGHTS_HEBREW['particle'], 100, 5)
     assert high > low
 
 

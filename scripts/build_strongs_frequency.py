@@ -62,14 +62,33 @@ def main():
     conn = sqlite3.connect(output_db)
     conn.execute("PRAGMA foreign_keys = ON")
 
-    # Create the strongs_frequency table
+    # Create the strongs_frequency table with composite PK so cross-testament
+    # bare-int keys (e.g. Greek G1 vs Hebrew H1, both normalised to '1') do
+    # not overwrite each other on INSERT OR REPLACE. The original NT-only
+    # schema used strongs_number as the sole PK, which was fine when there
+    # was only one testament but becomes a correctness bug with two.
+    # We auto-migrate any pre-existing single-PK table by dropping and
+    # recreating; lossless since the canonical source is macula_tokens,
+    # which we re-aggregate below.
     create_table_sql = """
     CREATE TABLE IF NOT EXISTS strongs_frequency (
-        strongs_number TEXT PRIMARY KEY,
+        strongs_number TEXT NOT NULL,
         occurrence_count INTEGER NOT NULL,
-        testament TEXT NOT NULL
+        testament TEXT NOT NULL,
+        PRIMARY KEY (strongs_number, testament)
     );
     """
+    # Detect the legacy single-PK schema and migrate transparently.
+    existing_pk = conn.execute(
+        "SELECT name FROM pragma_table_info('strongs_frequency') "
+        "WHERE pk > 0 ORDER BY pk"
+    ).fetchall() if conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='strongs_frequency'"
+    ).fetchone() else []
+    if existing_pk and len(existing_pk) == 1:
+        print("Existing strongs_frequency table uses legacy single-PK schema; "
+              "dropping and recreating with composite PK (strongs_number, testament)")
+        conn.execute("DROP TABLE strongs_frequency")
     conn.execute(create_table_sql)
 
     # Wipe any existing rows for this testament (idempotent re-runs).

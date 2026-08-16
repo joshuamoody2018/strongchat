@@ -276,37 +276,47 @@ class TestContextRetrievalService(unittest.TestCase):
         self.assertIsNone(_parse_reference('1 Unknown 1:1'))
 
     def test_failure_path_no_macula_data(self):
-        """Test handling of verses with no Macula data."""
-        # Create a hit with a reference that has no Macula data (OT book)
+        """Test handling of references that parse but have no Macula tokens.
+
+        Originally this case used Genesis 1:1, assuming the OT corpus was
+        not ingested. As of 2026-08-16 the OT (Hebrew WLC) is ingested
+        alongside the NT, so a well-known Genesis reference now resolves
+        to real tokens. To preserve the behaviour the test was written to
+        assert (empty bundle + 'no macula tokens for …'), we point at an
+        uncanonical verse (a chapter/verse outside any book's range).
+        """
+        # Use Gen 1:99999:1 — chapter is out of range; macula_tokens has no
+        # rows with chapter=99999 so the service returns an empty bundle.
+        uncanonical_ref = 'Genesis 99999:1'
         trace = IntentTrace(
             intent_id='test-intent',
             intent_data={'interpretation': 'test', 'confidence': 0.8},
             search_results={
                 'kjv': [
                     {
-                        'id': 'gen-1-1-kjv-1',
-                        'text': 'In the beginning...',
-                        'reference': 'Genesis 1:1',
+                        'id': 'gen-99999-1-kjv-1',
+                        'text': '(non-canonical reference)',
+                        'reference': uncanonical_ref,
                         'distance': 0.1
                     }
                 ]
             }
         )
-        
+
         result = PipelineResult(
             session_uuid=self.session_uuid,
             query='test query',
             traces={'test-intent': trace}
         )
-        
+
         # Run the service
         asyncio.run(self.service.retrieve_for_pipeline(result, self.session_uuid))
-        
+
         # Verify bundle exists but is empty
         hit = trace.search_results['kjv'][0]
         self.assertIn('context_bundle', hit)
         bundle = hit['context_bundle']
-        
+
         self.assertEqual(bundle['kept_word_count'], 0)
         self.assertEqual(bundle['unique_word_count'], 0)
         self.assertEqual(bundle['scored_word_count'], 0)

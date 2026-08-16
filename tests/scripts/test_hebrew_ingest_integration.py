@@ -31,17 +31,19 @@ SRC_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'src')
 
 # Synthetic Macula-Hebrew TSV — three rows in Gen 1:1 plus one row each in
 # Gen 1:2 and Ps 1:1. Uses xml:id 'o' prefix + 4-digit word_slot to match
-# the real Macula-Hebrew encoding. Strong numbers use the bare zero-padded
-# integer-with-optional-letter form (e.g. '0430' for H0430).
+# the real Macula-Hebrew encoding. Strong numbers use upstream-style zero-
+# padded form ('0430' = H0430) to verify normalize_strongs runs at ingest
+# time and produces canonical bare-int keys (the storage shape '430' not
+# '0430') that join to lexicon_definitions / strongs_frequency.
 HEBREW_TSV_ROWS = [
     # Genesis 1:1, three word-slots (11, 21, 41)
-    ('o010010010011', 'GEN 1:1!1', 'בְּרֵאשִׁית', 'רֵאשִׁית', '7225', 'R', 'subs', 'In the beginning'),
+    ('o010010010011', 'GEN 1:1!1', 'בְּרֵאשִׁית', 'רֵאשִׁית', '7225', 'R', 'noun', 'In the beginning'),
     ('o010010010021', 'GEN 1:1!3', 'בָּרָא',     'בָּרָא',     '1254', 'Vqvmp3sm', 'verb', 'created'),
-    ('o010010010041', 'GEN 1:1!6', 'אֱלֹהִים',   'אֱלֹהִים',   '0430', 'Ncmpa',    'subs', 'God'),
+    ('o010010010041', 'GEN 1:1!6', 'אֱלֹהִים',   'אֱלֹהִים',   '0430', 'Ncmpa',    'noun', 'God'),
     # Genesis 1:2, one word
-    ('o010010020021', 'GEN 1:2!4', 'תֹהוּ', 'תֹהוּ', '8414', 'Ncbsa', 'subs', 'formless'),
+    ('o010010020021', 'GEN 1:2!4', 'תֹהוּ', 'תֹהוּ', '8414', 'Ncbsa', 'noun', 'formless'),
     # Psalm 1:1, one word — book_num=19 sanity check
-    ('o190010010011', 'PSA 1:1!1', 'אַשְׁרֵי', 'אַשְׁרֵי', '0835', 'Amsa', 'adjv', 'Blessed'),
+    ('o190010010011', 'PSA 1:1!1', 'אַשְׁרֵי', 'אַשְׁרֵי', '0835', 'Amsa', 'adjective', 'Blessed'),
 ]
 
 HEBREW_TSV_HEADER = ['xml:id', 'ref', 'text', 'lemma', 'strongnumberx',
@@ -141,7 +143,11 @@ class TestHebrewIngestScripts(unittest.TestCase):
             # display, kept as-is in storage)
             self.assertEqual(rows[0][7], '7225')
             self.assertEqual(rows[1][7], '1254')
-            self.assertEqual(rows[2][7], '0430')
+            # '0430' (zero-padded upstream form) is normalized to bare '430'
+            # at ingest via build_lexicon_index.normalize_strongs imported
+            # into build_macula_index.py. This is what joins to
+            # strongs_frequency and lexicon_definitions.
+            self.assertEqual(rows[2][7], '430')
 
             # Verify Psalm 1:1 row (book_num 19, chap 1, verse 1, slot 11)
             ps_row = conn.execute(
@@ -154,7 +160,7 @@ class TestHebrewIngestScripts(unittest.TestCase):
             self.assertEqual(ps_row[2], 1)
             self.assertEqual(ps_row[3], 1)
             self.assertEqual(ps_row[4], 11)
-            self.assertEqual(ps_row[5], 'adjv')
+            self.assertEqual(ps_row[5], 'adjective')
 
             # Two distinct OT books
             distinct_ot = conn.execute(
@@ -223,10 +229,10 @@ class TestHebrewIngestScripts(unittest.TestCase):
             ).fetchall()]
             self.assertEqual(testament_values, ['OT'])
 
-            # H0430 (bare key '0430') appears once in fixture
+            # H0430 normalized to bare '430' at ingest (zero-padded form is source-only)
             count_430 = conn.execute(
                 "SELECT occurrence_count FROM strongs_frequency "
-                "WHERE strongs_number='0430' AND testament='OT'"
+                "WHERE strongs_number='430' AND testament='OT'"
             ).fetchone()
             self.assertIsNotNone(count_430)
             self.assertEqual(count_430[0], 1)
@@ -245,7 +251,9 @@ class TestHebrewIngestScripts(unittest.TestCase):
         # 1) Hebrew ingest first
         self._run_hebrew_ingest()
 
-        # 2) Build a tiny Greek TSV in same working dir (so we share the DB)
+        # Greek TSV columns match build_macula_index's canonical schema:
+        #     'xml:id', 'ref', 'text', 'lemma', 'strongnumberx',
+        #     'morph', 'pos', 'gloss'
         greek_tsv = os.path.join(self.work_dir, 'macula-greek.tsv')
         greek_manifest = os.path.join(self.work_dir, 'greek-manifest.json')
         greek_rows = [

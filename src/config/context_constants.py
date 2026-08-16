@@ -27,27 +27,51 @@ POS_WEIGHTS: Dict[str, float] = {
 # Mirrors the Greek Robinson scheme: high-weight content words (verb, noun,
 # proper noun, adjective), low-weight function words (article, conjunction,
 # preposition, adverb, pronoun), and an exact-match-first semantics.
-# The keys are the lowercase `pos` values produced by Macula Hebrew TSV
-# (see mappings/lowfat-macula-hebrew.xquery). One prefix-free per category;
-# ContextRetrievalService uses longest-prefix matching identical to Greek.
+#
+# The keys match the lowercase `pos` values produced by the Macula-Hebrew
+# TSV `pos` column (see mappings/lowfat-macula-hebrew.xquery's local:val()
+# lower-casing). Macula-Hebrew emits full English words ('noun', 'verb',
+# 'preposition', 'particle', 'conjunction', 'suffix', 'adjective',
+# 'pronoun', 'adverb'). HAM trigram aliases ('subs', 'nmpr', 'artc', ...)
+# are also included defensively so the table is robust to a future
+# upstream schema migration.
+#
+# ContextRetrievalService uses exact-match lookup only (no longest-prefix
+# rule, since every Macula-Hebrew pos value is a single lowercase token).
+# Unknown POS values default to 0.50 via get_pos_weight().
 POS_WEIGHTS_HEBREW: Dict[str, float] = {
-    # High-weight content words
-    'verb': 0.95,   # Verbs (all stems/tenses)
-    'subs': 0.825,  # Substantives (common nouns)
-    'nmpr': 0.825,  # Proper nouns (parallel to subs — same weight as Greek nouns)
-    'adjv': 0.65,   # Adjectives
+    # High-weight content words (matching Macula-Hebrew full-word POS)
+    'verb': 0.95,         # Verbs (all stems/tenses)
+    'noun': 0.825,        # Nouns
+    'proper noun': 0.825, # Proper nouns (lowercase form; defensive)
+    'adjective': 0.65,    # Adjectives
 
     # Low-weight function words
-    'artc': 0.05,  # Articles (definite article ה)
-    'conj': 0.05,  # Conjunctions (ו, כי, אשר as conjunction)
-    'prep': 0.25,  # Prepositions (ב, ל, מ, כ, עם)
-    'advb': 0.10,  # Adverbs / particles
-    'prps': 0.40,  # Personal pronouns
-    'prde': 0.40,  # Demonstrative pronouns
-    'intr': 0.10,  # Interrogatives / particles
-    'neg': 0.10,   # Negation (לא, אל)
-    'card': 0.10,  # Cardinals (numbers as function words)
-    'ordn': 0.10,  # Ordinals
+    'article': 0.05,      # Definite article (-הַ)
+    'conjunction': 0.05,  # Conjunctions (ו, כי, אשר)
+    'preposition': 0.25,  # Prepositions (ב, ל, מ, כ, עם)
+    'adverb': 0.10,       # Adverbs / particles
+    'particle': 0.10,     # Particles
+    'pronoun': 0.40,      # Personal pronouns
+    'suffix': 0.40,       # Pronominal suffixes (possessive on名词 etc.)
+
+    # HAM trigram aliases (defensive — covers an alternate upstream shape):
+    # subs=substantive (noun), nmpr=proper-noun, adjv=adjective, artc=article,
+    # conj=conjunction, prep=preposition, advb=adverb, prps/prde=pronoun,
+    # intr=interrogative/particle, neg=negation particle, card/ordn=numbers.
+    'subs': 0.825,
+    'nmpr': 0.825,
+    'adjv': 0.65,
+    'artc': 0.05,
+    'conj': 0.05,
+    'prep': 0.25,
+    'advb': 0.10,
+    'prps': 0.40,
+    'prde': 0.40,
+    'intr': 0.10,
+    'neg': 0.10,
+    'card': 0.10,
+    'ordn': 0.10,
 }
 
 # Tuning knobs for context retrieval

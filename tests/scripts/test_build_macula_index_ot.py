@@ -115,6 +115,26 @@ def test_parse_xml_id_hebrew_rejects_wrong_length():
         parse_xml_id_hebrew('o01001001001')   # 12 chars — missing one digit
 
 
+def test_parse_xml_id_hebrew_accepts_trailing_letter():
+    """WLC encodes maqaf-attached morphemes (e.g. the prefixed ה article)
+    by appending a single Hebrew letter to the 13-char xml:id. The parser
+    must accept this and use only the 13-char prefix for slot decomposition."""
+    book, ch, vs, wp = parse_xml_id_hebrew('o010010050031ה')
+    assert book == 1
+    assert ch == 1
+    assert vs == 5
+    assert wp == 31
+
+
+def test_parse_xml_id_hebrew_accepts_two_trailing_letters():
+    """Allow up to two trailing letters for defensive parsing."""
+    book, ch, vs, wp = parse_xml_id_hebrew('o010010050031הב')
+    assert book == 1
+    assert ch == 1
+    assert vs == 5
+    assert wp == 31
+
+
 def test_parse_xml_id_hebrew_rejects_empty():
     with pytest.raises(ValueError):
         parse_xml_id_hebrew('')

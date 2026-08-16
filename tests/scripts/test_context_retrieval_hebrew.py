@@ -106,13 +106,17 @@ CREATE TABLE messages (
 # Surface forms use NFC-normalized Hebrew Unicode.
 GEN_1_1_TOKENS = [
     # (row_id, book_num, book_osis, ch, vs, word_pos, surface, lemma, strongs, morph, pos, gloss)
-    ('o010010010011', 1, 'Gen', 1, 1, 11,  'בְּרֵאשִׁית', 'רֵאשִׁית',  '7225', 'R',  'subs', 'In the beginning'),
+    # pos values reflect the real Macula-Hebrew TSV `pos` column (full
+    # English words: 'noun', 'verb', 'article', etc — see
+    # scripts/build_macula_index.py docstring + config/context_constants.py
+    # POS_WEIGHTS_HEBREW).
+    ('o010010010011', 1, 'Gen', 1, 1, 11,  'בְּרֵאשִׁית', 'רֵאשִׁית',  '7225', 'R',  'noun', 'In the beginning'),
     ('o010010010021', 1, 'Gen', 1, 1, 21,  'בָּרָא',     'בָּרָא',     '1254', 'Vqvmp3sm', 'verb', 'created'),
-    ('o010010010041', 1, 'Gen', 1, 1, 41,  'אֱלֹהִים',   'אֱלֹהִים',   '0430', 'Ncmpa',   'subs', 'God'),
-    ('o010010010051', 1, 'Gen', 1, 1, 51,  'אֵת',         'אֵת',         '0853', 'Td',      'artc', '(object marker)'),
-    ('o010010010061', 1, 'Gen', 1, 1, 61,  'הַשָּׁמַיִם', 'שָׁמַיִם',   '8064', 'Ncmpa',   'subs', 'the heavens'),
-    ('o010010010071', 1, 'Gen', 1, 1, 71,  'וְאֵת',       'אֵת',         '0853', 'Tdc',     'artc', 'and (object marker)'),
-    ('o010010010081', 1, 'Gen', 1, 1, 81,  'הָאָרֶץ',     'אֶרֶץ',       '0776', 'Ncbsa',   'subs', 'the earth'),
+    ('o010010010041', 1, 'Gen', 1, 1, 41,  'אֱלֹהִים',   'אֱלֹהִים',   '0430', 'Ncmpa',   'noun', 'God'),
+    ('o010010010051', 1, 'Gen', 1, 1, 51,  'אֵת',         'אֵת',         '0853', 'Td',      'article', '(object marker)'),
+    ('o010010010061', 1, 'Gen', 1, 1, 61,  'הַשָּׁמַיִם', 'שָׁמַיִם',   '8064', 'Ncmpa',   'noun', 'the heavens'),
+    ('o010010010071', 1, 'Gen', 1, 1, 71,  'וְאֵת',       'אֵת',         '0853', 'Tdc',     'article', 'and (object marker)'),
+    ('o010010010081', 1, 'Gen', 1, 1, 81,  'הָאָרֶץ',     'אֶרֶץ',       '0776', 'Ncbsa',   'noun', 'the earth'),
 ]
 
 # Strong's frequency (Hebrew OT testament). Keys tie to macula_tokens strongs.

@@ -19,6 +19,13 @@ import sqlite3
 import sys
 from pathlib import Path
 
+# Reuse the cross-testament Strong's normalizer from the lexicon ingest
+# so macula_tokens strongs keys join lexicon_definitions / strongs_frequency
+# without further reshaping at query time. For Greek Macula upstream this
+# is a no-op (e.g. '976' -> '976'); for Hebrew upstream it strips leading
+# zeros and lowercases the suffix (e.g. '0430' -> '430', '0047G' -> '47g').
+from build_lexicon_index import normalize_strongs
+
 
 BOOK_NUM_TO_OSIS_NT = {
     40: "Matt", 41: "Mark", 42: "Luke", 43: "John",
@@ -107,23 +114,38 @@ def parse_xml_id_hebrew(xml_id):
     Word_slot is a morphological slot encoding (values like 0011, 0012, 0021)
     not a strict 1-based position; treated opaque here as an int.
 
+    Some WLC rows append a single trailing Hebrew letter to the 13-char
+    xml:id (e.g. ``o010010050031ה``) to mark a maqaf-attached morpheme
+    (commonly the prefixed article ``ה`` attached to the following word).
+    The parser accepts up to two trailing letters and uses the 13-char
+    prefix for slot decomposition, preserving the full xml:id as the
+    primary key so distinct maqaf-attached morphemes remain unique.
+
     Args:
-        xml_id (str): e.g. "o010010010011" for Gen 1:1 word 11
+        xml_id (str): e.g. "o010010010011" for Gen 1:1 word 11, or
+            "o010010050031ה" for the maqaf-attached ה on Gen 1:5 word 31.
 
     Returns:
         tuple: (book_num, chapter, verse, word_pos)
     """
     if not xml_id.startswith('o'):
         raise ValueError(f"Hebrew xml_id must start with 'o': {xml_id}")
-    if len(xml_id) != 13:
+    # WLC rows may carry a trailing Hebrew letter suffix marking a
+    # maqaf-attached morpheme; allow up to two trailing letters while
+    # the standard 13-char prefix encodes the slot.
+    if len(xml_id) < 13:
         raise ValueError(
-            f"Hebrew xml_id must be 13 chars (o+2+3+3+4): {xml_id!r} "
+            f"Hebrew xml_id must be at least 13 chars (o+2+3+3+4): {xml_id!r} "
             f"(len={len(xml_id)})"
         )
-    book_num = int(xml_id[1:3])
-    chapter = int(xml_id[3:6])
-    verse = int(xml_id[6:9])
-    word_pos = int(xml_id[9:13])
+    # Use the first 13 chars for parsing. Any trailing letters are part
+    # of the row_id primary key but do not affect book/chapter/verse/slot
+    # decomposition.
+    core = xml_id[:13]
+    book_num = int(core[1:3])
+    chapter = int(core[3:6])
+    verse = int(core[6:9])
+    word_pos = int(core[9:13])
     return book_num, chapter, verse, word_pos
 
 
@@ -340,7 +362,7 @@ def main():
                         word_pos,
                         row['text'],  # surface
                         row['lemma'],
-                        row['strongnumberx'],  # strongs
+                        normalize_strongs(row['strongnumberx']),  # strongs (canonical bare-int key)
                         row['morph'],
                         row['pos'],
                         row['gloss']  # gloss

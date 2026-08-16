@@ -98,10 +98,29 @@ def _get_context_retrieval_messages(db: ChatDatabase, session_uuid: str) -> list
 
 
 def _validate_context_bundles(result) -> None:
-    """Validate that every hit has a properly structured context_bundle."""
+    """Validate that every hit has a properly structured context_bundle.
+
+    Per-hit routing by testament is now supported (since 2026-08-16): OT
+    verses use Macula-Hebrew WLC, HAM-Full-English POS codes ('verb',
+    'noun', etc), and tbESH lexicon. NT verses keep Robinson POS ('V-',
+    'N-') and tbESG+LSJ. This validator asserts that each successful
+    bundle carries at least one content word whose pos matches its
+    testament — Greek ('V-'/'N-'/'A-') OR Hebrew ('verb'/'noun'/'proper
+    noun'/'adjective') — and that the lexicon_source tag matches the
+    respective path.
+    """
     saw_definitions = False  # regression canary for strongs-key normalization
     saw_gloss = False         # regression canary for macula gloss schema
     saw_nonempty_bundle = False  # gating flag: only fire canaries if >= 1 bundle had kept words
+
+    # Per-testament content-word POS sets:
+    # Greek Robinson codes (high-weight categories in POS_WEIGHTS).
+    greek_content_pos = ('V-', 'N-', 'A-')
+    # Macula-Hebrew `pos` column full-English-word forms (see
+    # scripts/build_macula_index.py docstring + config.context_constants.
+    # POS_WEIGHTS_HEBREW).
+    hebrew_content_pos = ('verb', 'noun', 'proper noun', 'adjective')
+
     for item in result.results:
         hits = item.get('hits', [])
         for hit in hits:
@@ -131,21 +150,26 @@ def _validate_context_bundles(result) -> None:
                     f"kept_words count {len(kept_words)} > unique_word_count {unique_word_count}"
                 )
 
-                # (d) at least one scored_words entry has pos in ('V-', 'N-')
+                # (d) at least one scored_words entry has a content-word
+                # pos for its testament. Greek (Robinson 'V-'/'N-'/'A-')
+                # OR Hebrew (Macula 'verb'/'noun'/'adjective'/'proper noun')
                 has_content_word = any(
-                    word.get('pos', '') in ('V-', 'N-')
+                    word.get('pos', '') in greek_content_pos + hebrew_content_pos
                     for word in scored_words
                 )
                 assert has_content_word, (
-                    "no scored_words entry with pos in ('V-', 'N-')"
+                    "no scored_words entry has a content-word pos for either "
+                    f"testament — Greek {greek_content_pos} or Hebrew "
+                    f"{hebrew_content_pos}"
                 )
 
                 saw_nonempty_bundle = True
 
                 # (e) every kept_word has the full contract: non-empty
                 # strongs/surface/lemma, correct types for numeric and list
-                # fields, lexicon_source tag, composite_score > 0. Catches
-                # drift between live output and the synthesis-ready schema.
+                # fields, lexicon_source tag (branch-by-testament),
+                # composite_score > 0. Catches drift between live output
+                # and the synthesis-ready schema.
                 for w in kept_words:
                     assert isinstance(w.get('strongs'), str) and w['strongs'], (
                         f"kept word strongs must be a non-empty str: {w.get('strongs')!r}")
@@ -163,8 +187,11 @@ def _validate_context_bundles(result) -> None:
                         f"sense_count must be int >= 1: {w.get('sense_count')!r}")
                     assert isinstance(w.get('composite_score'), (int, float)) and w['composite_score'] > 0, (
                         f"composite_score must be positive number: {w.get('composite_score')!r}")
-                    assert w.get('lexicon_source') == 'tbESG+LSJ', (
-                        f"lexicon_source must be 'tbESG+LSJ': {w.get('lexicon_source')!r}")
+                    # lexicon_source tag must match the bundle's testament:
+                    # Greek path uses 'tbESG+LSJ', Hebrew path uses 'tbESH'.
+                    assert w.get('lexicon_source') in ('tbESG+LSJ', 'tbESH'), (
+                        f"lexicon_source must be 'tbESG+LSJ' (Greek) or 'tbESH'"
+                        f" (Hebrew): {w.get('lexicon_source')!r}")
                     assert isinstance(w.get('macula_occurrences'), int) and w['macula_occurrences'] >= 1, (
                         f"macula_occurrences must be int >= 1: {w.get('macula_occurrences')!r}")
                     # sense_count must match len(definitions) when defs exist
@@ -179,16 +206,18 @@ def _validate_context_bundles(result) -> None:
                         saw_gloss = True
 
     # (f) regression canaries: gated on saw_nonempty_bundle so a result set
-    # of purely-OT verses (which legitimately have no Macula tokens and thus
-    # no definitions) does not false-fire. If at least one non-empty bundle
-    # was produced, at least one of its kept words must carry non-empty
-    # definitions and a non-empty gloss. If either fires, a downstream ingest
-    # script (build_lexicon_index.py or build_macula_index.py) has regressed
-    # and the context bundle is no longer synthesis-ready.
+    # of purely-failure-mode (unparseable references, missing-chapter refs)
+    # hits does not false-fire. As of 2026-08-16 both testaments are
+    # ingested, so OT verses legitimately produce non-empty bundles and
+    # contribute to the canaries. If at least one non-empty bundle was
+    # produced, at least one of its kept words must carry non-empty
+    # definitions and a non-empty gloss. If either fires, a downstream
+    # ingest script (build_lexicon_index.py or build_macula_index.py) has
+    # regressed and the context bundle is no longer synthesis-ready.
     assert saw_nonempty_bundle, (
-        "no non-empty context_bundle was produced for any hit — either every "
-        "retrieved verse was OT (no Macula tokens), or context retrieval is "
-        "silently producing all-empty bundles"
+        "no non-empty context_bundle was produced for any hit — context "
+        "retrieval is silently producing all-empty bundles (expected at "
+        "least one valid Greek or Hebrew hit)"
     )
     assert saw_definitions, (
         "no kept word across any non-empty bundle has definitions — lexicon "
