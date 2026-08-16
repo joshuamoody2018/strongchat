@@ -228,6 +228,17 @@ async def _setup_and_build_mcp():
 
     configure_logging()
 
+    # Auth: if STRONGCHAT_API_KEY + STRONGCHAT_PUBLIC_URL are both set in
+    # env, wire the MCP SDK's bearer-token verifier into the server. The
+    # public endpoint will return 401 to any request missing a matching
+    # ``Authorization: Bearer <key>`` header. When both env vars are
+    # unset (default), the server runs unauthenticated (stdio + local
+    # HTTP). Anything in between (only one of the two set) logs a
+    # WARNING and falls back to unauthenticated so misconfiguration is
+    # LOUD but never silently leaves a public endpoint open.
+    from auth import load_static_bearer_config
+    auth_settings, token_verifier = load_static_bearer_config()
+
     try:
         from mcp.server.mcpserver import MCPServer
     except ImportError:
@@ -247,14 +258,19 @@ async def _setup_and_build_mcp():
     # Pre-v2 SDK paths degrade to ``Context = None``, in which case the
     # tool falls back to a no-op progress callback (pipelines still run;
     # the agent just loses streaming notifications).
-    mcp = MCPServer(name="strongchat", description=(
-        "StrongChat retrieve_context + validate_answer MCP server. "
-        "retrieve_context runs the intent -> HyDE -> retrieval -> "
-        "original-language context pipeline and returns a self-contained "
-        "JSON bundle. validate_answer is a stub today (raises "
-        "NotImplementedError); its contract is locked in for the future "
-        "agent harness / wrapper that drives state management."
-    ))
+    mcp = MCPServer(
+        name="strongchat",
+        description=(
+            "StrongChat retrieve_context + validate_answer MCP server. "
+            "retrieve_context runs the intent -> HyDE -> retrieval -> "
+            "original-language context pipeline and returns a self-contained "
+            "JSON bundle. validate_answer is a stub today (raises "
+            "NotImplementedError); its contract is locked in for the future "
+            "agent harness / wrapper that drives state management."
+        ),
+        auth=auth_settings,
+        token_verifier=token_verifier,
+    )
 
     def _make_progress_callback(ctx):
         """Build a ProgressCallback that bridges pipeline stage events onto

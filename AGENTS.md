@@ -38,6 +38,19 @@ function of its inputs. Nothing server-side persists between calls.
   progress notifications so claude.ai / opencode remote MCP clients
   surface pipeline stages as the user waits. Local stdio
   (`claude_desktop_config.json`) still works unchanged.
+- **Public exposure (Phase D, ✅ 2026-08-16):** `deploy/Caddyfile`
+  reverse-proxies the local HTTP server to a public sslip.io hostname
+  with on-demand Let's Encrypt TLS. Bearer auth is enforced INSIDE the
+  MCP backend via `src/auth.py::StaticBearerTokenVerifier` (MCP SDK
+  `TokenVerifier` + `AuthSettings`; SDK auto-wires `BearerAuthBackend`
+  + `AuthContextMiddleware` + serves
+  `/.well-known/oauth-protected-resource`). Enabled by setting both
+  `STRONGCHAT_API_KEY` + `STRONGCHAT_PUBLIC_URL` env at server boot.
+  Caddy is pure TLS + reverse proxy — single source of truth for the
+  shared key. See `deploy/README.md` for the claude.ai web OAuth
+  custom-connector caveat (lazy follow-up: needs an
+  `OAuthAuthorizationServerProvider`, strictly additive on top of
+  today's `token_verifier`).
 - **Assets (read-only data, NOT stripped):** `data/chroma/`
   (verse vectors) and `data/macula_index.db` (Greek/Hebrew tokens +
   lexicon). These survive because they are read-only data assets — not
@@ -88,7 +101,13 @@ contract).
 * `todo.md` - All actionable items (next steps and deferred tasks)
 
 ## Code Structure
-* `src/server.py` - **MCP server entry point** (FastMCP stdio)
+* `src/server.py` - **MCP server entry point** (stdio or streamable-http
+  via `mcp v2.x`'s `MCPServer`); bearer auth wired via `src/auth.py`.
+* `src/auth.py` - `StaticBearerTokenVerifier` (implements
+  `mcp.server.auth.provider.TokenVerifier`) + `load_static_bearer_config()`;
+  constant-time compare, SDK auto-wires `BearerAuthBackend` +
+  `AuthContextMiddleware` when `STRONGCHAT_API_KEY` +
+  `STRONGCHAT_PUBLIC_URL` env are both set.
 * `src/main.py` - JSON-printing CLI smoke-test (calls `retrieve_context_impl`)
 * `src/services/llm/` - LLM framework (wrapper, aimessage, exceptions)
 * `src/services/base.py` - Shared `BaseService` foundation (no DB, just
@@ -104,6 +123,9 @@ contract).
   registry** (`llm_models.py`, `registry.py`), **JSONL logging setup**
   (`logging.py`)
 * `scripts/` - Setup, ingest, and corpus-build utilities
+* `deploy/` - `Caddyfile` (sslip.io on-demand TLS reverse proxy) +
+  `README.md` (public exposure runbook + claude.ai web OAuth caveat).
+  Auth key lives in MCP backend env, not Caddy suite.
 
 ## Read-only data assets (NOT application DB)
 * `data/chroma/` - ChromaDB persistent verse vectors (kjv_verses, web_verses)

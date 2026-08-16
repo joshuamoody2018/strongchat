@@ -119,22 +119,46 @@
     test asserting the progress callback receives all five stage
     events in order.
 
-### Phase D — Public exposure via sslip.io + Caddy + bearer auth (NEXT)
-- [ ] Add a Starlette bearer-token middleware in `src/server.py` (gated
-  by `STRONGCHAT_API_KEY` env, hashed with `secrets.compare_digest`).
-  When unset, the middleware passes through (so local/stdio use is
-  unaffected; production deploy must set the env).
-- [ ] Add `deploy/Caddyfile` using sslip.io on-demand TLS so a host
-  reachable at `strongchat.<anything>.sslip.io` gets an automatic cert.
-  Caddy terminates TLS, forwards to `127.0.0.1:8765` plaintext.
-- [ ] Document the deploy + the **claude.ai OAuth caveat**: claude.ai's
-  hosted custom-connector expects OAuth 2.0 PKCE metadata at
-  `/.well-known/oauth-authorization-server`. A static bearer key works
-  for opencode / Claude Desktop / curl but NOT directly for claude.ai
-  web. Provide the minimal OAuth metadata path as a follow-up option.
-- [ ] Tests: extension of `tests/system/test_mcp_server_http.py` with a
-  missing-token (401) and wrong-token (401) case against a server with
-  `STRONGCHAT_API_KEY` set in env.
+### Phase D — Public exposure via sslip.io + Caddy + bearer auth (✅ DONE 2026-08-16)
+- [x] Add `src/auth.py` exposing `StaticBearerTokenVerifier` (an
+  `mcp.server.auth.provider.TokenVerifier` implementation that constant-time
+  compares the `Authorization: Bearer <key>` value against
+  `STRONGCHAT_API_KEY`) plus `load_static_bearer_config()` which returns
+  `(AuthSettings, token_verifier)` for `MCPServer.__init__` from env.
+- [x] Wire `auth_settings` + `token_verifier` into `MCPServer(...)` inside
+  `_setup_and_build_mcp` in `src/server.py`. Both env controls
+  (`STRONGCHAT_API_KEY` + `STRONGCHAT_PUBLIC_URL`) set → SDK auto-wires
+  `BearerAuthBackend` + `AuthContextMiddleware` + serves
+  `/.well-known/oauth-protected-resource`. Only one set — log WARNING +
+  disable auth so misconfiguration is LOUD but never silently leaves a
+  public endpoint open.
+- [x] Add `deploy/Caddyfile` using sslip.io + on-demand TLS. Caddy
+  terminates TLS, forwards to `127.0.0.1:8765` plaintext, passes the
+  `Authorization` header through unchanged (the bearer check happens
+  in the MCP backend; Caddy is pure TLS + reverse proxy). Long
+  SSE-friendly timeouts for in-flight retrieve_context calls.
+- [x] Add `deploy/README.md` documenting bring-up (generate key → boot
+  MCP server bound to 127.0.0.1 → run Caddy pointing at the sslip.io
+  hostname → smoke with curl carrying the bearer) + claude.ai web
+  custom-connector caveat (below) + production-hardening options.
+- [x] Tests `tests/system/test_mcp_server_http.py` extension: 401 on
+  missing/malformed/wrong bearer; 200 on correct bearer; 200 on
+  unauthenticated path when `STRONGCHAT_API_KEY` unset (backwards
+  compatible — stdio / local HTTP / ACL'd exposure stays open).
+
+### Outstanding follow-up: hosted claude.ai web custom-connector OAuth
+The static bearer is sufficient for any client where the user can paste
+the key into config (opencode / Claude Desktop / curl / opencode-hosted
+agent harnesses). It is **NOT** sufficient on its own for the hosted
+**claude.ai web** custom-connector flow, which expects OAuth 2.0 PKCE
+authorization-server metadata at
+`/.well-known/oauth-authorization-server` plus `/authorize`, `/token`,
+`/register` endpoints that issue short-lived scoped tokens. Building
+that surfaces the MCP SDK's `OAuthAuthorizationServerProvider` hook
+(strictly additive — swap `token_verifier` for `auth_server_provider`
+on `MCPServer(...)` and implement the four PKCE endpoints). Documented
+in `deploy/README.md` under "What's left for full claude.ai web OAuth
+support" so it isn't forgotten.
 
 ## Earlier parity work (pre-MCP, still relevant)
 

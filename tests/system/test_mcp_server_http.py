@@ -262,5 +262,156 @@ def _patch_get_runner(runner):
         yield
 
 
+# --------------------------------------------------------------------------- #
+# Bearer-token authentication integration tests
+# --------------------------------------------------------------------------- #
+#
+# When ``STRONGCHAT_API_KEY`` + ``STRONGCHAT_PUBLIC_URL`` are set in env
+# at server boot, the MCP SDK's ``BearerAuthBackend`` middleware is
+# auto-wired: every request to ``/mcp`` MUST carry ``Authorization:
+# Bearer <key>``. Anything else gets a ``401 Unauthorized`` before the
+# MCP session machinery even runs. These tests boot the server normally
+# (over an ephemeral HTTP socket) with the auth env vars set, then send
+# raw POST requests to assert:
+#
+#   - missing Authorization header      -> 401
+#   - malformed Authorization header   -> 401
+#   - wrong bearer token               -> 401
+#   - correct bearer token             -> 200 (initialize completes)
+#
+# The mcp.client SDK can't be used to drive the failing cases here
+# because it sends no ``Authorization`` header by default and (correctly)
+# fails on 401 itself, so we use plain httpx2 to inspect the raw status.
+
+
+_TEST_API_KEY = "test-secret-bearer-key-not-for-prod"
+
+
+class TestMcpServerBearerAuth(unittest.TestCase):
+    """Verify the static-API-key bearer middleware:
+    rejects missing/malformed/wrong bearer; accepts the configured key.
+    """
+
+    def setUp(self):
+        # Make sure no leftover auth env from other tests pollutes us.
+        for k in ("STRONGCHAT_API_KEY", "STRONGCHAT_PUBLIC_URL"):
+            os.environ.pop(k, None)
+
+    def test_bearer_auth_rejects_unauthenticated_requests(self):
+        asyncio.run(self._run_auth_reject_cases())
+
+    async def _run_auth_reject_cases(self):
+        import httpx2
+
+        port = _pick_ephemeral_port()
+        os.environ["STRONGCHAT_API_KEY"] = _TEST_API_KEY
+        os.environ["STRONGCHAT_PUBLIC_URL"] = f"http://strongchat.test:{port}"
+        try:
+            async with _running_http_server("127.0.0.1", port) as url:
+                init_request_body = (
+                    '{"jsonrpc":"2.0","id":1,"method":"initialize",'
+                    '"params":{"protocolVersion":"2025-11-25",'
+                    '"capabilities":{},'
+                    '"clientInfo":{"name":"http-auth-test","version":"1.0"}}}'
+                )
+                headers_ok = {"Authorization": f"Bearer {_TEST_API_KEY}"}
+
+                async with httpx2.AsyncClient() as client:
+                    # (1) Missing Authorization header -> 401.
+                    r = await client.post(
+                        url,
+                        content=init_request_body,
+                        headers={"Content-Type": "application/json",
+                                 "Accept": "application/json, text/event-stream"},
+                    )
+                    self.assertEqual(
+                        r.status_code, 401,
+                        f"missing bearer expected 401 got {r.status_code}; "
+                        f"body={r.text[:300]!r}",
+                    )
+
+                    # (2) Malformed Authorization scheme -> 401.
+                    for bad_hdr in (
+                        {"Authorization": "Basic xyz=="},
+                        {"Authorization": "Bearer"},
+                        {"Authorization": _TEST_API_KEY},
+                        {"Authorization": f"Bearer  {_TEST_API_KEY} mismatch"},  # wrong token after bearer
+                        {"Authorization": "Bearer wrong-token"},
+                    ):
+                        r = await client.post(
+                            url,
+                            content=init_request_body,
+                            headers={"Content-Type": "application/json",
+                                     "Accept": "application/json, text/event-stream",
+                                     **bad_hdr},
+                        )
+                        self.assertEqual(
+                            r.status_code, 401,
+                            f"bad header {bad_hdr!r} expected 401 got "
+                            f"{r.status_code}; body={r.text[:300]!r}",
+                        )
+
+                    # (3) Correct bearer -> 200 OK with the initialize result.
+                    r = await client.post(
+                        url,
+                        content=init_request_body,
+                        headers={"Content-Type": "application/json",
+                                 "Accept": "application/json, text/event-stream",
+                                 **headers_ok},
+                    )
+                    self.assertEqual(
+                        r.status_code, 200,
+                        f"correct bearer expected 200 got {r.status_code}; "
+                        f"body={r.text[:500]!r}",
+                    )
+                    # 200 path is text/event-stream; peek the body for the
+                    # protocol version (already returned by the init
+                    # handler, so the auth check sat AND the handler ran).
+                    self.assertIn("protocolVersion", r.text)
+                    print(" bearer-auth: 401 / 401x5 / 200 sequence PASS")
+        finally:
+            os.environ.pop("STRONGCHAT_API_KEY", None)
+            os.environ.pop("STRONGCHAT_PUBLIC_URL", None)
+
+
+class TestMcpServerNoAuthWhenUnset(unittest.TestCase):
+    """Without ``STRONGCHAT_API_KEY``, the server stays unauthenticated
+    (the default stdio / local dev path must not be silently locked
+    behind an unset token)."""
+
+    def setUp(self):
+        for k in ("STRONGCHAT_API_KEY", "STRONGCHAT_PUBLIC_URL"):
+            os.environ.pop(k, None)
+
+    def test_unauthenticated_request_succeeds_when_no_key(self):
+        asyncio.run(self._run_unconfigured_case())
+
+    async def _run_unconfigured_case(self):
+        import httpx2
+
+        port = _pick_ephemeral_port()
+        async with _running_http_server("127.0.0.1", port) as url:
+            body = (
+                '{"jsonrpc":"2.0","id":1,"method":"initialize",'
+                '"params":{"protocolVersion":"2025-11-25","capabilities":{},'
+                '"clientInfo":{"name":"noauth","version":"1.0"}}}'
+            )
+            async with httpx2.AsyncClient() as client:
+                # No Authorization header at all; server must accept.
+                r = await client.post(
+                    url,
+                    content=body,
+                    headers={"Content-Type": "application/json",
+                             "Accept": "application/json, text/event-stream"},
+                )
+                self.assertEqual(
+                    r.status_code, 200,
+                    f"unauthenticated path expected 200 got "
+                    f"{r.status_code}; body={r.text[:300]!r}",
+                )
+                self.assertIn("protocolVersion", r.text)
+                print(" no-auth passthrough: 200 PASS")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
