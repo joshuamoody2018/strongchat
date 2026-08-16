@@ -5,10 +5,6 @@
 - [ ] `validate_answer` body (Phase B) — contract locked; stub raises
       `NotImplementedError` in `src/server.py:validate_answer_impl`. Build the
       fact-check library + tests (`tests/scripts/test_mcp_server.py`).
-- [ ] `deploy/bootstrap.sh` — mint OAuth signing key + client creds alongside
-      the bearer API key so a fresh box is OAuth-ready without manual scripts.
-- [ ] `deploy/README.md` — document the claude.ai custom-connector onboarding
-      flow (URL, paste client_id/secret, Caddy TLS, missing-env error).
 
 ## Pipeline (13-step architecture)
 
@@ -26,5 +22,5 @@
 
 ## Ops
 
-- [ ] Tag `dev` as `v0.1-classic-sqlite-audit` once `mcp` stabilizes; switch
-      default branch to `mcp`.
+- [ ] Switch default branch on GitHub from `main` to `mcp` — needs to be
+      done via GitHub web UI / API (no CLI credentials available locally).
