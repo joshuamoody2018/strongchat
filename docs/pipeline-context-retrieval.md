@@ -11,40 +11,53 @@ The implemented service is located under `src/services/context/` and is composed
 
 ## Message Types and Schemas
 
-All LLM and embedding calls are recorded as rows in the `messages` table, linked to `ref_message_types`. The message type used by the context retrieval pipeline is:
+The audit trail is JSONL log records (no application DB). The context
+retrieval pipeline uses one message type:
 
 | Message type | Model slug | Purpose |
 |--------------|------------|---------|
-| `context_retrieval` | (none) | Programmatic summary of per-intent context enrichment results. |
+| `context_retrieval` | (none) | Per-intent programmatic summary of context enrichment results. |
 
 ### Schema
 
-- `context_retrieval` has no JSON response schema; it is recorded as a summary row with the following structure:
+- `context_retrieval` has no JSON response schema; it is emitted as a
+  summary record carrying the following extras on the INFO log record:
   ```json
   {
+    "event": "context_retrieval",
     "intent_id": "string",
-    "translation_count": "integer",
-    "hit_count": "integer", 
-    "scored_word_count": "integer",
-    "kept_word_count": "integer"
+    "translation_count": 2,
+    "hit_count": 4,
+    "scored_word_count": 25,
+    "kept_word_count": 8,
+    "elapsed_ms": 120,
+    "status": "ok"
   }
   ```
 
+The companion DEBUG audit record carries the full per-hit bundles payload
+serialized as the `raw_response` field (mirrors the former `messages`
+row's `raw_response` column shape).
+
 ## Service Contracts
 
-All services inherit from `BaseService` (`src/services/base.py`), which provides a shared `LLMWrapper`, `ChatDatabase`, and `GlobalReferenceCache`.
+All services inherit from `BaseService` (`src/services/base.py`), which
+provides a shared `LLMWrapper` and the process-wide
+`MessageTypeDefRegistry` (`DEFAULT_REGISTRY`). There is no application DB;
+audit records land in the JSONL log file (`data/logs/strongchat.log`).
 
 ### ContextRetrievalService (`src/services/context/service.py`)
 
 ```python
-async def retrieve_for_pipeline(self, pipeline_result: PipelineResult, session_uuid: str) -> PipelineResult:
+async def retrieve_for_pipeline(self, pipeline_result: PipelineResult, correlation_id: str) -> PipelineResult:
     """Return PipelineResult with context_bundle attached to each hit."""
 ```
 
 - Launches one `_process_intent` task per intent in parallel via `asyncio.gather`.
 - For each intent × translation × hit: parses reference, looks up Macula tokens, filters by POS, scores words, and attaches bundle.
 - Per-intent failures are captured and logged; the pipeline continues with other intents.
-- Records one `context_retrieval` summary message per intent that had search results.
+- Emits one INFO `context_retrieval` + DEBUG `raw_response`-carrying audit
+  record per intent that has search results.
 
 ## Data Flow
 
@@ -67,11 +80,11 @@ PipelineResult (after retrieval)
 PipelineResult with hit["context_bundle"]
 ```
 
-1. `PipelineRunner.run()` calls `context_service.retrieve_for_pipeline(result, session_uuid)`.
+1. `PipelineRunner.run()` calls `context_service.retrieve_for_pipeline(result, correlation_id)`.
 2. For each intent with search results, `_process_intent` is launched in parallel.
 3. For each hit in the intent's search results: `_build_bundle_for_hit` parses the reference, queries Macula tokens, filters by POS, scores words, and trims to the top 20%.
 4. Each hit gets a `context_bundle` with two lists: `scored_words` (all filtered words with scores) and `kept_words` (trimmed subset with full word data).
-5. One `context_retrieval` summary message is recorded per intent.
+5. One INFO `context_retrieval` + one DEBUG `raw_response`-carrying audit log record is emitted per intent.
 
 ## Scoring Formula
 

@@ -13,111 +13,127 @@
   - Exponential backoff retry (3 max)
   - Error routing to stderr
   - Response parser with validation (`AIMessage`, `parse_response`)
+- **Audit**: JSONL log records per call (INFO timing + DEBUG prompt/response)
 - **Testing**: ✅ 6/6 parser tests passing, offline/online service tests passing
-- **Documentation**: ✅ Comprehensive docs in `/llm-framework.md`
 
-#### 2. Database Layer
+#### 2. Message-type Registry (replaces former database layer)
 - **Status**: ✅ Complete
-- **Location**: `src/services/sqlite/`
+- **Location**: `src/config/llm_models.py`, `src/config/registry.py`
 - **Components**:
-  - Chat session management
-  - Message storage with `ref_message_types` FK
-  - Intent tracking (structured)
-  - Foreign-key enforcement enabled per connection
-- **Testing**: ✅ CRUD operations validated, migration tests passing
-- **Database**: ✅ Schema implemented and tested
+  - `@dataclass(frozen=True) MessageTypeDef` for every pipeline slug
+  - Process-wide singleton `MessageTypeDefRegistry` built at import time
+  - Read-only after import; GIL-safe across asyncio tasks and worker threads
+- **No application database**: the former `sessions`, `messages`,
+  `ref_message_types` SQLite tables are gone. Read-only data assets
+  (`data/chroma/`, `data/macula_index.db`) survive; application state does
+  not.
 
-#### 3. Configuration System
+#### 3. Structured Logging
 - **Status**: ✅ Complete
-- **Location**: `src/config/`
+- **Location**: `src/config/logging.py`
+- **Components**:
+  - Cross-process-safe JSONL handler (`concurrent-log-handler`)
+  - `JsonFormatter` emits one JSON object per line
+  - Levels: `ERROR` (default when env unset), `INFO` (per-step timing),
+    `DEBUG` (full audit — prompt + raw_response + bundle payloads)
+  - Configurable via `STRONGCHAT_LOG_LEVEL` / `STRONGCHAT_LOG_FILE` env
+- **Replaces**: every former SQLite `messages` row insert
+
+#### 4. Configuration System
+- **Status**: ✅ Complete
 - **Components**:
   - JSON schemas for response validation (`schemas.py`)
   - Pipeline-agnostic prompt templates (`prompts.py`)
-  - Centralized configuration management
+  - Static message-type definitions (`llm_models.py`)
+  - Singleton registry (`registry.py`)
+  - JSONL logging setup (`logging.py`)
 
-#### 4. Intent Generation Service
+#### 5. Intent Generation Service
 - **Status**: ✅ Complete
-- **Location**: `src/services/intent/`, `src/config/schemas.py`, `src/config/prompts.py`
-- **Components**:
-  - `IntentService.generate_intents(query, session_uuid)`
-  - `INTENT_GENERATION_SCHEMA` with 1-5 intents, `keywords_explicit`, `keywords_inferred`, `themes`, `is_primary`
-  - Records one `intent_generation` message per call
-- **Testing**: ✅ Offline mocked test + live system test passing
+- **Location**: `src/services/intent/`
+- `IntentService.generate_intents(query, correlation_id)`
+- `INTENT_GENERATION_SCHEMA` with 1-5 intents, `keywords_explicit`,
+  `keywords_inferred`, `themes`, `is_primary`
+- Emits one INFO `llm_call` + DEBUG `llm_call_audit` log records per call
 
-#### 5. HyDE Generation Service
+#### 6. HyDE Generation Service
 - **Status**: ✅ Complete
 - **Location**: `src/services/hyde/`
-- **Components**:
-  - `HydeService.generate_for_intents(intents, session_uuid)`
-  - `HYDE_GENERATION_SCHEMA` (`hyde_document` string, min length 50)
-  - Bias-isolated prompt: receives only one serialized intent, never the original query
-  - Parallel generation via `asyncio.gather`, per-intent failure capture
-- **Testing**: ✅ Offline and live tests passing
+- `HydeService.generate_for_intents(intents, correlation_id)`
+- `HYDE_GENERATION_SCHEMA` (`hyde_document` string, min length 50)
+- Bias-isolated prompt: receives only one serialized intent, never the
+  original query
+- Parallel generation via `asyncio.gather`, per-intent failure capture
 
-#### 6. Embeddings Service
+#### 7. Embeddings Service
 - **Status**: ✅ Complete
 - **Location**: `src/services/embeddings/`
-- **Components**:
-  - `EmbeddingService.embed_texts(texts, session_uuid, record, chunk_size)`
-  - Batched OpenRouter `/v1/embeddings` calls (default chunk size 256)
-  - Retry/backoff for transient `APITimeoutError` / `APIConnectionError`
-  - Records one summary `embedding_generation` message per call (no raw vectors)
-- **Testing**: ✅ Offline tests passing
+- `EmbeddingService.embed_texts(texts, correlation_id, record, chunk_size)`
+- Batched OpenRouter `/v1/embeddings` calls (default chunk size 256)
+- Retry/backoff for transient `APITimeoutError` / `APIConnectionError`
+- Emits one INFO `embedding_generation` + DEBUG audit log record per call
+  (no raw vectors in the log)
 
-#### 7. Verse Store / Corpus Ingest
+#### 8. Verse Store / Corpus Ingest
 - **Status**: ✅ Complete
 - **Location**: `src/services/vectordb/`, `scripts/ingest_corpus.py`
-- **Components**:
-  - `VerseStore` wrapper around `chromadb.PersistentClient`
-  - Cosine HNSW collections (`kjv_verses`, `web_verses`)
-  - Idempotent upsert via `create_batches` + `collection.upsert`
-  - `corpus_ingest` summary message recorded after each translation ingest
-- **Testing**: ✅ Full KJV + WEB ingest verified, semantic check passes
+- `VerseStore` wrapper around `chromadb.PersistentClient`
+- Cosine HNSW collections (`kjv_verses`, `web_verses`)
+- Idempotent upsert via `create_batches` + `collection.upsert`
+- One INFO `corpus_ingest` log record per translation
 
-#### 8. Retrieval Service
+#### 9. Retrieval Service
 - **Status**: ✅ Complete
 - **Location**: `src/services/retrieval/`
-- **Components**:
-  - `RetrievalService.search(hyde_docs, session_uuid, top_k, translations)`
-  - Embeds valid HyDE docs in one `embedding_generation` call
-  - Fans out Chroma queries across `(doc, translation)` pairs via `asyncio.gather`
-  - Returns structured hits with `id`, `text`, `reference`, `distance`
-- **Testing**: ✅ Offline tests passing
+- `RetrievalService.search(hyde_docs, correlation_id, top_k, translations)`
+- Embeds valid HyDE docs in one `embedding_generation` call
+- Fans out Chroma queries across `(doc, translation)` pairs via
+  `asyncio.gather`
+- Returns structured hits with `id`, `text`, `reference`, `distance`
 
-#### 9. Pipeline Orchestrator
+#### 10. Pipeline Orchestrator + Serializer + MCP Server
 - **Status**: ✅ Complete
-- **Location**: `src/services/pipeline/`, `src/main.py`
-- **Components**:
-  - `PipelineRunner` composes `IntentService`, `HydeService`, `EmbeddingService`, `VerseStore`, `RetrievalService`
-  - `PipelineResult` dataclass with `session_uuid`, `query`, `intents`, `hyde_docs`, `results`
-  - CLI runner: `src/main.py`
-- **Testing**: ✅ Live end-to-end test passing
+- **Location**: `src/services/pipeline/`, `src/server.py`, `src/main.py`
+- `PipelineRunner` composes `IntentService`, `HydeService`,
+  `EmbeddingService`, `VerseStore`, `RetrievalService`,
+  `ContextRetrievalService`. Stateless: each `run()` call generates a
+  fresh `correlation_id` for log slicing only.
+- `PipelineResult` dataclass with `session_uuid` (= correlation_id),
+  `query`, per-intent `traces`, `query_analysis`.
+- `pipeline_result_to_bundle(result) -> dict` serializes a
+  JSON-safe bundle (embeddings dropped) that the agent carries across the
+  retrieve → synthesize → validate loop.
+- MCP entry point: `src/server.py` (`FastMCP` stdio) exposes
+  `retrieve_context` + a `validate_answer` stub.
+- CLI smoke-test: `src/main.py` calls the same `retrieve_context` body and
+  prints the bundle as JSON.
 
-#### 10. Context Retrieval
-- **Status**: ✅ Complete (committed 2026-08-02)
+#### 11. Context Retrieval
+- **Status**: ✅ Complete
 - **Location**: `src/services/context/`
-- **Message type**: `context_retrieval` (programmatic, summary schema)
-- **Test files**: `tests/scripts/test_context_retrieval_service.py`, `tests/scripts/test_context_retrieval_offline.py`, `tests/system/test_context_retrieval_e2e.py`
-- **Score formula**: cite `composite_score(pos_weight, frequency_count, sense_count) = pos_weight * log1p(1/frequency_count) * log1p(sense_count)` from `src/config/context_constants.py`
-- **KNOWN LIMITATION**: the `gloss` field on each kept_word is empty because todo 3's `macula_tokens` SQLite schema does not include the `gloss` column from the canonical TSV. Flagged for a follow-up "fix macula schema" plan.
+- Per-intent original-language enrichment (Greek NT or Hebrew OT, routed
+  by `book_num < 40` vs `>= 40`)
+- Score formula: `composite_score(pos_weight, frequency_count, sense_count)
+  = pos_weight * log1p(1/frequency_count) * log1p(sense_count)`
+- Bundle attached in-place to each hit's `context_bundle`
+- Per-intent INFO `context_retrieval` (with `intent_id`, `translation_count`,
+  `hit_count`, `scored_word_count`, `kept_word_count`, `elapsed_ms`,
+  `status`) + DEBUG audit log record (full `bundles` payload serialized as
+  `raw_response`)
 
 ### 📋 Planned Components
 
-#### 1. RRF Implementation
-- **Status**: 📋 Planned
+#### 1. RRF Implementation (steps 5-6)
+- Intra-intent ranking + cross-intent merging + score normalization
 - **Location**: `src/services/rrf/` (planned)
-- **Requirements**:
-  - Intra-intent ranking (step 5)
-  - Cross-intent merging (step 6)
-  - Score normalization and fusion
 
-#### 2. Synthesis, Evaluation, and Validation
+#### 2. Synthesis, Evaluation, and Validation (steps 10-13)
 - **Status**: 📋 Planned
 - **Requirements**:
-  - Response synthesis (step 10)
-  - Evaluator loop (step 11)
-  - Fact validation (step 12)
-  - Final response (step 13)
+  - `validate_answer` MCP tool implementation (today: stub raises
+    `NotImplementedError`; contract locked in)
+  - Response synthesis (step 10), evaluator loop (step 11), final response
+    (13)
 
 ## Task Tracking
 
@@ -130,22 +146,22 @@
 - ✅ Corpus/vector store
 - ✅ Pipeline orchestrator
 - 📋 RRF implementation
-- 📋 Macula integration
 - 📋 Synthesis / evaluator / validator
+- 📋 `validate_answer` MCP tool implementation
 
 ### todo-deferred.md
-- Error handling improvements
-- Async database operations
-- Performance optimizations
-- Production readiness features
-- Testing infrastructure expansion
-- Deployment automation
+- RRF (steps 5-6)
+- Graph expansion (step 8)
+- Synthesis / evaluator / validator (steps 10-13)
+- HTTP/SSE MCP transport (if ever needed beyond stdio)
+- Production monitoring
 
 ## Critical Dependencies
 
 ### 1. Intent Generation → HyDE Generation
 - Intent service output required for HyDE input
-- Structured intents with `intent_id`, `interpretation`, `keywords_*`, `themes` needed for N×M generation
+- Structured intents with `intent_id`, `interpretation`, `keywords_*`,
+  `themes` needed for N×M generation
 
 ### 2. HyDE Generation → Embeddings → Retrieval
 - HyDE documents feed `EmbeddingService.embed_texts`
@@ -153,17 +169,17 @@
 
 ### 3. LLM Framework → All LLM Services
 - `LLMWrapper` provides validated, retry-aware LLM calls
-- Error handling and audit logging essential
+- JSONL audit is the only side-effect; there is no application DB
 
-### 4. Database → All Services
-- `ChatDatabase` stores session and messages
-- `GlobalReferenceCache` loads `ref_message_types` rows
-- `BaseService` exposes shared wrapper, cache, and DB to every service
+### 4. Registry → All Services
+- `MessageTypeDefRegistry` (`DEFAULT_REGISTRY`) provides immutable config
+- Built once at import time; safe to share across tasks/threads
+- Tests can construct a fixture registry or call `DEFAULT_REGISTRY.reset([...])`
 
 ## Risk Assessment
 
 ### Low Risk
-- Database schema evolution
+- Registry evolution (frozen dataclasses are easy to extend)
 - LLM framework integration
 - Configuration management
 - Intent/HyDE/retrieval pipeline
@@ -174,39 +190,42 @@
 - RRF algorithm implementation
 
 ### High Risk
-- Macula external dependencies
+- Macula external dependencies (~80 MB TSV for Hebrew)
 - Synthesis/evaluator loop convergence
-- Pipeline step 5-13 integration timing
+- `validate_answer` structured-feedback design (drives agent behaviour)
 
 ## Success Metrics
 
 ### Technical Metrics
 - ✅ Framework test coverage: 100%
 - ✅ Integration test coverage: live pipeline end-to-end passing
-- ✅ Pipeline step completion: 7/13 implemented (input, intent generation, HyDE generation, retrieval, Macula lookup, context retrieval, re-rank/organize)
+- ✅ Pipeline step completion: 7/13 implemented (input, intent generation,
+  HyDE generation, retrieval, Macula lookup, context retrieval,
+  re-rank/organize)
+- ✅ MCP server: `retrieve_context` live; `validate_answer` contract locked in
 
 ### Functional Metrics
-- ✅ Database operations: All working
 - ✅ Intent generation: Working and audited
 - ✅ HyDE generation: Working and audited
 - ✅ Embeddings: Working and audited
 - ✅ Retrieval: Working and audited
 - ✅ Context retrieval: Working and audited
-- 📋 End-to-end synthesis: In progress
+- 📋 End-to-end synthesis: In progress (agent-side, not server-side)
 
 ## Next Milestones
 
-### Short Term (1-2 weeks)
+### Short Term
+1. Implement `validate_answer` MCP tool (step 12) with structured
+   `unsupported_claims` / `missing_coverage` / `suggested_refinement`
+   feedback
+2. Update retrieval service to feed ranked results into synthesis (after RRF)
+
+### Medium Term
 1. Implement RRF ranking (steps 5-6)
-2. Update retrieval service to feed ranked results into synthesis
+2. Implement response synthesis (step 10) — typically agent-side
+3. Add evaluator loop (step 11)
 
-### Medium Term (1-2 months)
-1. Implement response synthesis (step 10)
-2. Add evaluator loop (step 11)
-3. Add fact validation (step 12)
-4. Implement final response (step 13)
-
-### Long Term (3-6 months)
+### Long Term
 1. Complete full pipeline integration (steps 5-13)
 2. Add production monitoring
-3. Optimize performance and scalability
+3. Evaluate whether the agent harness / state-management wrapper is its own repo

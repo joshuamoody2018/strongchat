@@ -1,75 +1,36 @@
 #!/usr/bin/env python3
 """Offline tests for RetrievalService.
 
-Runs without OPENROUTER_API_KEY by injecting deterministic embedding
+Runs without OPENROUTER_STRONGCHAT_DEFAULT_API_KEY by injecting deterministic embedding
 functions and querying temp Chroma collections. Verifies that HyDE
 documents are embedded once, queried in parallel across translations,
-and returned as structured, sorted hits.
+and returned as structured, sorted hits. Audit assertions use the standard
+``logging`` module via ``self.assertLogs``; there is no application DB.
 """
 
 import asyncio
 import hashlib
 import json
+import logging
 import os
-import sqlite3
 import sys
 import tempfile
 import unittest
+import uuid
 
 # Add src and scripts directories to path before any service imports.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 sys.path.insert(0, os.path.dirname(__file__))
 
-# BaseService -> LLMWrapper requires a non-placeholder OPENROUTER_API_KEY at
-# import/instantiation time. Since these tests use an injected embed_fn, a
-# dummy key is sufficient and does not weaken the "unset in parent shell" QA.
-if not os.getenv("OPENROUTER_API_KEY"):
-    os.environ["OPENROUTER_API_KEY"] = "dummy-key-for-offline-tests"
+if not os.getenv("OPENROUTER_STRONGCHAT_DEFAULT_API_KEY"):
+    os.environ["OPENROUTER_STRONGCHAT_DEFAULT_API_KEY"] = "dummy-key-for-offline-tests"
 
-from config.cache import GlobalReferenceCache
 from services.embeddings import EmbeddingService
 from services.retrieval import RetrievalService
 from services.vectordb import VerseStore
 
 DIMENSION = 1536
 MODEL_SLUG = "openai/text-embedding-3-small"
-
-SCHEMA_SQL = """
-CREATE TABLE sessions (
-    uuid TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_by TEXT
-);
-
-CREATE TABLE ref_message_types (
-    slug TEXT PRIMARY KEY,
-    step_name TEXT NOT NULL,
-    creator_type TEXT NOT NULL,
-    request_schema TEXT NOT NULL,
-    model_slug TEXT NOT NULL,
-    temperature REAL DEFAULT 0.0,
-    additional_model_settings TEXT,
-    max_retries INTEGER DEFAULT 3,
-    is_active BOOLEAN DEFAULT TRUE,
-    description TEXT,
-    prompt_template TEXT
-);
-
-CREATE TABLE messages (
-    uuid TEXT PRIMARY KEY,
-    session_uuid TEXT,
-    message_type_slug TEXT,
-    unique_prompt TEXT NOT NULL,
-    raw_response TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    response_at TIMESTAMP,
-    num_tries INTEGER DEFAULT 1,
-    error_text TEXT,
-    FOREIGN KEY (session_uuid) REFERENCES sessions (uuid),
-    FOREIGN KEY (message_type_slug) REFERENCES ref_message_types (slug)
-);
-"""
 
 
 def deterministic_vector(text: str) -> list[float]:
@@ -108,57 +69,18 @@ class TestRetrievalService(unittest.TestCase):
     """Offline functional tests for RetrievalService."""
 
     def setUp(self):
-        """Create a fresh fixture DB and temp Chroma collections."""
+        """Create a temp Chroma store and seed collections."""
         self._tmp = tempfile.TemporaryDirectory()
-        self.db_path = os.path.join(self._tmp.name, "fixture.db")
         self.chroma_path = os.path.join(self._tmp.name, "chroma")
 
-        with sqlite3.connect(self.db_path) as conn:
-            conn.executescript(SCHEMA_SQL)
-            conn.execute(
-                """
-                INSERT INTO ref_message_types
-                  (slug, step_name, creator_type, request_schema, model_slug,
-                   temperature, additional_model_settings, max_retries,
-                   is_active, description, prompt_template)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    "embedding_generation",
-                    "Embedding Generation",
-                    "programmatic",
-                    json.dumps(
-                        {
-                            "type": "object",
-                            "properties": {
-                                "model": {"type": "string"},
-                                "dimension": {"type": "integer"},
-                                "count": {"type": "integer"},
-                            },
-                            "required": ["model", "dimension", "count"],
-                        }
-                    ),
-                    MODEL_SLUG,
-                    0.0,
-                    "{}",
-                    3,
-                    1,
-                    "Batched embedding generation call record",
-                    None,
-                ),
-            )
-            conn.commit()
-
-        self.embedding_service = EmbeddingService(self.db_path, embed_fn=embed_fn)
+        self.embedding_service = EmbeddingService(embed_fn=embed_fn)
         self.verse_store = VerseStore(path=self.chroma_path)
         self._seed_collections()
         self.service = RetrievalService(
-            self.db_path,
             embedding_service=self.embedding_service,
             verse_store=self.verse_store,
         )
-
-        self.session_uuid = self.service.db.create_session(name="retrieval-test")
+        self.correlation_id = str(uuid.uuid4())
 
     def tearDown(self):
         """Close the service and drop the temp directory."""
@@ -199,17 +121,15 @@ class TestRetrievalService(unittest.TestCase):
         results = asyncio.run(
             self.service.search(
                 hyde_docs,
-                session_uuid=self.session_uuid,
+                session_uuid=self.correlation_id,
                 top_k=5,
                 translations=("kjv", "web"),
             )
         )
 
-        # Only the non-empty doc should be processed; one entry per translation.
         self.assertEqual(len(results), 2)
         self.assertEqual({r["translation"] for r in results}, {"kjv", "web"})
 
-        # Locate the results for the planted doc.
         planted_results = {
             r["translation"]: r
             for r in results
@@ -229,7 +149,6 @@ class TestRetrievalService(unittest.TestCase):
             )
             self.assertAlmostEqual(top_hit["distance"], 0.0, places=5)
 
-            # Distances must be non-decreasing (ascending sort).
             distances = [h["distance"] for h in hits]
             self.assertEqual(distances, sorted(distances))
 
@@ -248,7 +167,7 @@ class TestRetrievalService(unittest.TestCase):
         results = asyncio.run(
             self.service.search(
                 hyde_docs,
-                session_uuid=self.session_uuid,
+                session_uuid=self.correlation_id,
                 top_k=5,
                 translations=("empty",),
             )
@@ -260,39 +179,36 @@ class TestRetrievalService(unittest.TestCase):
         self.assertEqual(results[0]["translation"], "empty")
         self.assertEqual(results[0]["hits"], [])
 
-    def test_embedding_generation_recorded_once(self):
-        """A single embedding_generation message is recorded per search call."""
+    def test_embedding_generation_logged_once(self):
+        """A single embedding_generation INFO record is emitted per search call."""
         hyde_docs = [
             {"intent_id": "record-test", "hyde_document": _verse_text(0)},
             {"intent_id": "record-test-2", "hyde_document": _verse_text(1)},
         ]
 
-        asyncio.run(
-            self.service.search(
-                hyde_docs,
-                session_uuid=self.session_uuid,
-                top_k=3,
-                translations=("kjv",),
+        with self.assertLogs("strongchat", level="INFO") as cm:
+            asyncio.run(
+                self.service.search(
+                    hyde_docs,
+                    session_uuid=self.correlation_id,
+                    top_k=3,
+                    translations=("kjv",),
+                )
             )
-         )
 
-        # Check message was recorded
-        self.service.db.cursor.execute("""
-            SELECT uuid, session_uuid, message_type_slug, unique_prompt,
-                   raw_response, created_at, response_at, num_tries, error_text
-            FROM messages 
-            WHERE session_uuid = ? AND message_type_slug = ?
-        """, (self.session_uuid, "embedding_generation"))
-        messages = self.service.db.cursor.fetchall()
-        self.assertEqual(len(messages), 1)
-        parsed = json.loads(messages[0][4])
-        self.assertEqual(parsed["model"], MODEL_SLUG)
-        self.assertEqual(parsed["dimension"], DIMENSION)
-        self.assertEqual(parsed["count"], 2)
+        embed_records = [
+            r for r in cm.records
+            if r.__dict__.get("event") == "embedding_generation"
+            and r.__dict__.get("status") == "ok"
+        ]
+        self.assertEqual(len(embed_records), 1)
+        # The DEBUG audit row carries the model slug + dimension + count summary.
+        # Confirm the summary count through the INFO record's count extra.
+        self.assertEqual(embed_records[0].__dict__.get("count"), 2)
 
     def test_default_constructor_builds_services(self):
         """RetrievalService with None deps constructs its own services."""
-        service = RetrievalService(self.db_path)
+        service = RetrievalService()
         self.assertIsNotNone(service.embedding_service)
         self.assertIsNotNone(service.store)
         service.close()

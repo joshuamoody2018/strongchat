@@ -1,215 +1,249 @@
-"""LLMWrapper with schema-driven approach and retry logic"""
+"""LLMWrapper with schema-driven approach, retry logic, and structured logging.
+
+No application database. Audit trail is JSONL log records keyed by
+``correlation_id`` (the parameter previously named ``session_uuid``); the field
+is threaded through service signatures unchanged so existing call sites stay
+stable, but it is no longer persisted anywhere — it is purely a log correlation
+id so multi-instance interleaved logs can be sliced per pipeline run.
+"""
 
 import asyncio
-import aiohttp
 import logging
-import json
-from typing import Dict, Any, Optional
-from datetime import datetime
+import os
+import time
+from typing import Any, Dict, Optional
 
-from .aimessage import AIMessage
-from ..sqlite.database import ChatDatabase
-from services.database.adapters.sqlite import AsyncSQLiteDatabase
-from config.cache import GlobalReferenceCache
-from .exceptions import (
-    APITimeoutError, APIConnectionError, APIResponseError,
-    MaxRetriesExceededError, ConfigurationError, ModelNotFoundError
+import aiohttp
+
+from config.logging import get_logger
+from config.registry import MessageTypeDefRegistry, DEFAULT_REGISTRY
+from services.llm.aimessage import AIMessage
+from services.llm.exceptions import (
+    APIConnectionError,
+    APIResponseError,
+    APITimeoutError,
+    ConfigurationError,
+    MaxRetriesExceededError,
+    ModelNotFoundError,
 )
 
-logger = logging.getLogger(__name__)
 
 class LLMWrapper:
-    """LLM wrapper with database-driven configuration and retry logic"""
-    
-    def __init__(self, db_path: str = 'data/chat_database.db'):
-        """Initialize LLM wrapper with database connection.
-        
+    """LLM wrapper with registry-driven configuration and retry logic."""
+
+    def __init__(
+        self,
+        registry: Optional[MessageTypeDefRegistry] = None,
+    ) -> None:
+        """Initialize the wrapper.
+
         Args:
-            db_path: Path to the SQLite database file
+            registry: Optional overridden :class:`MessageTypeDefRegistry`.
+                Defaults to the process-wide singleton built at import time.
         """
-        self.db = ChatDatabase(db_path)
-        self.db_port = AsyncSQLiteDatabase(db_path)
-        self.cache = GlobalReferenceCache()
+        self.registry = registry or DEFAULT_REGISTRY
+        self.logger = get_logger("strongchat.llm")
         self.base_url = "https://openrouter.ai/api/v1"
         self.timeout = 30.0
-        
-        # Set up API configuration
         self._setup_api_config()
-    
-    def _setup_api_config(self):
-        """Set up API configuration from environment"""
-        import os
-        
-        self.api_key = os.getenv('OPENROUTER_API_KEY')
-        if not self.api_key or self.api_key == 'your_openrouter_api_key_here':
+
+    def _setup_api_config(self) -> None:
+        """Set up API configuration from environment."""
+        self.api_key = os.getenv("OPENROUTER_STRONGCHAT_DEFAULT_API_KEY")
+        if not self.api_key or self.api_key == "your_OPENROUTER_STRONGCHAT_DEFAULT_API_KEY_here":
             raise ConfigurationError("OpenRouter API key not configured")
-        
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
             "HTTP-Referer": "http://localhost:8000",
-            "X-Title": "StrongChat"
+            "X-Title": "StrongChat",
         }
-    
-    async def call_api(self, message_type_slug: str, unique_prompt: str, 
-                        session_uuid: str) -> AIMessage:
-        """Call LLM API with database-driven configuration and retry logic.
-        
+
+    async def call_api(
+        self,
+        message_type_slug: str,
+        unique_prompt: str,
+        session_uuid: str,
+    ) -> AIMessage:
+        """Call the LLM API with registry-driven configuration and retry logic.
+
         Args:
-            message_type_slug: Slug of the message type from database
-            unique_prompt: The core message content
-            session_uuid: UUID of the session
-            
+            message_type_slug: Slug of the message type from the registry.
+            unique_prompt: The core message content.
+            session_uuid: Log-only correlation id (no longer persisted).
+
         Returns:
-            AIMessage object with the result
-            
+            AIMessage object with the result.
+
         Raises:
-            MaxRetriesExceededError: If max retries are exceeded
+            MaxRetriesExceededError: If max retries are exceeded.
         """
-        # Get message type configuration from cache
-        message_type = self.cache.get_message_type(message_type_slug)
-        if not message_type:
-            raise ValueError(f"Message type '{message_type_slug}' not found or inactive")
-        
-        max_retries = message_type['max_retries']
-        
-        # Get prompt template if available
-        prompt_template = message_type.get('prompt_template')
+        message_type = self.registry.get(message_type_slug)
+        max_retries = message_type.max_retries
+
+        prompt_template = message_type.prompt_template
         if prompt_template:
-            # Format the prompt with the unique_prompt
             formatted_prompt = prompt_template.format(query=unique_prompt)
         else:
             formatted_prompt = unique_prompt
-        
-        # Create AIMessage object to track retries
+
         aimessage = AIMessage(
             session_uuid=session_uuid,
             message_type_slug=message_type_slug,
-            unique_prompt=unique_prompt
+            unique_prompt=unique_prompt,
         )
-        
-        last_error = None
-        
+
+        started = time.monotonic()
+        last_error: Optional[Exception] = None
+
         for attempt in range(max_retries):
             try:
                 raw_response = await self._call_api_async(
                     prompt=formatted_prompt,
-                    model=message_type['model_slug'],
-                    temperature=message_type['temperature'],
-                    additional_settings=message_type['additional_model_settings']
+                    model=message_type.model_slug,
+                    temperature=message_type.temperature,
+                    additional_settings=message_type.additional_model_settings,
                 )
 
                 try:
                     aimessage.mark_success_from_text(
                         raw_response,
-                        schema=message_type.get('request_schema'),
+                        schema=message_type.request_schema,
                     )
                 except ValueError as parse_error:
                     raise APIResponseError(str(parse_error)) from parse_error
 
-                await self.db_port.create_message_with_type(
-                    session_uuid=session_uuid,
-                    message_type_slug=message_type_slug,
-                    unique_prompt=unique_prompt,
-                    raw_response=aimessage.raw_response,
-                    num_tries=aimessage.num_tries
+                elapsed_ms = int((time.monotonic() - started) * 1000)
+                self.logger.info(
+                    message_type_slug,
+                    extra={
+                        "event": "llm_call",
+                        "correlation_id": session_uuid,
+                        "slug": message_type_slug,
+                        "attempts": attempt + 1,
+                        "elapsed_ms": elapsed_ms,
+                        "status": "ok",
+                    },
                 )
-
+                self.logger.debug(
+                    message_type_slug,
+                    extra={
+                        "event": "llm_call_audit",
+                        "correlation_id": session_uuid,
+                        "slug": message_type_slug,
+                        "prompt": unique_prompt,
+                        "raw_response": aimessage.raw_response,
+                        "attempts": attempt + 1,
+                    },
+                )
                 return aimessage
 
             except (APITimeoutError, APIConnectionError, APIResponseError) as e:
                 last_error = e
                 aimessage.mark_failure(str(e), increment_tries=True)
-
                 if attempt < max_retries - 1:
                     backoff_time = min(1.0 * (2 ** attempt), 30.0)
-                    logger.warning(f"API call failed, retrying in {backoff_time}s: {e}")
+                    self.logger.warning(
+                        message_type_slug,
+                        extra={
+                            "event": "llm_call_retry",
+                            "correlation_id": session_uuid,
+                            "slug": message_type_slug,
+                            "attempt": attempt + 1,
+                            "backoff_ms": int(backoff_time * 1000),
+                            "error": str(e),
+                        },
+                    )
                     await asyncio.sleep(backoff_time)
                 else:
-                    # Final attempt failed - save failure to database
-                    await self.db_port.create_message_with_type(
-                        session_uuid=session_uuid,
-                        message_type_slug=message_type_slug,
-                        unique_prompt=unique_prompt,
-                        num_tries=aimessage.num_tries,
-                        error_text=str(e)
+                    elapsed_ms = int((time.monotonic() - started) * 1000)
+                    self.logger.error(
+                        message_type_slug,
+                        extra={
+                            "event": "llm_call",
+                            "correlation_id": session_uuid,
+                            "slug": message_type_slug,
+                            "attempts": aimessage.num_tries,
+                            "elapsed_ms": elapsed_ms,
+                            "status": "error",
+                            "error": str(e),
+                        },
                     )
-                    logger.error(f"API call failed after {max_retries} attempts: {e}")
-                    raise MaxRetriesExceededError(f"API call failed after {max_retries} attempts: {e}")
-                
+                    self.logger.debug(
+                        message_type_slug,
+                        extra={
+                            "event": "llm_call_audit",
+                            "correlation_id": session_uuid,
+                            "slug": message_type_slug,
+                            "prompt": unique_prompt,
+                            "raw_response": None,
+                            "attempts": aimessage.num_tries,
+                            "error": str(e),
+                        },
+                    )
+                    raise MaxRetriesExceededError(
+                        f"API call failed after {max_retries} attempts: {e}"
+                    ) from e
+
             except Exception as e:
-                # Other errors - mark failure and save
                 aimessage.mark_failure(str(e), increment_tries=True)
-                await self.db_port.create_message_with_type(
-                    session_uuid=session_uuid,
-                    message_type_slug=message_type_slug,
-                    unique_prompt=unique_prompt,
-                    num_tries=aimessage.num_tries,
-                    error_text=str(e)
+                self.logger.error(
+                    message_type_slug,
+                    extra={
+                        "event": "llm_call",
+                        "correlation_id": session_uuid,
+                        "slug": message_type_slug,
+                        "attempts": aimessage.num_tries,
+                        "status": "error",
+                        "error": str(e),
+                    },
                 )
                 raise
-        
-        raise MaxRetriesExceededError(f"Max retries exceeded for message type '{message_type_slug}'")
-    
-    async def _call_api_async(self, prompt: str, model: str, temperature: float = 0.1,
-                            additional_settings: Optional[Dict[str, Any]] = None) -> str:
-        """Async API call using aiohttp.
-        
-        Args:
-            prompt: The prompt to send
-            model: Model slug
-            temperature: Temperature setting
-            additional_settings: Additional model settings
-            
-        Returns:
-            Raw response text
-            
-        Raises:
-            APITimeoutError: If timeout occurs
-            APIConnectionError: If connection fails
-            APIResponseError: If API returns error
-            ModelNotFoundError: If model not found
-        """
+
+        raise MaxRetriesExceededError(
+            f"Max retries exceeded for message type '{message_type_slug}'"
+        )
+
+    async def _call_api_async(
+        self,
+        prompt: str,
+        model: str,
+        temperature: float = 0.1,
+        additional_settings: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Async API call using aiohttp."""
         url = f"{self.base_url}/chat/completions"
-        
-        # Build payload with additional settings
-        payload = {
+        payload: Dict[str, Any] = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
-            "temperature": temperature
+            "temperature": temperature,
         }
-        
-        # Merge additional settings
         if additional_settings:
             payload.update(additional_settings)
-        
+
         try:
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.timeout)) as session:
+            async with aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=self.timeout)
+            ) as session:
                 async with session.post(url, json=payload, headers=self.headers) as response:
-                    
                     if response.status == 200:
                         result = await response.json()
-                        return result['choices'][0]['message']['content']
-                    elif response.status == 401:
+                        return result["choices"][0]["message"]["content"]
+                    if response.status == 401:
                         raise APIResponseError("Invalid API key")
-                    elif response.status == 404:
+                    if response.status == 404:
                         raise ModelNotFoundError(f"Model {model} not found")
-                    else:
-                        error_text = await response.text()
-                        raise APIResponseError(f"API returned {response.status}: {error_text}")
-                        
-        except asyncio.TimeoutError:
-            raise APITimeoutError(f"API call timed out after {self.timeout}s")
-        except aiohttp.ClientError as e:
-            raise APIConnectionError(f"API connection error: {e}")
-    
-    def close(self):
-        """Close both synchronous and asynchronous database connections and cache."""
-        self.db.close()
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            asyncio.run(self.db_port.close())
-        else:
-            asyncio.create_task(self.db_port.close())
-        self.cache.close()
+                    error_text = await response.text()
+                    raise APIResponseError(
+                        f"API returned {response.status}: {error_text}"
+                    )
+        except asyncio.TimeoutError as exc:
+            raise APITimeoutError(
+                f"API call timed out after {self.timeout}s"
+            ) from exc
+        except aiohttp.ClientError as exc:
+            raise APIConnectionError(f"API connection error: {exc}") from exc
+
+    def close(self) -> None:
+        """No resources to release; kept for backwards compatibility."""
+        pass

@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import sqlite3
+import time
 from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -22,10 +23,10 @@ class ContextRetrievalService(BaseService):
 
     def __init__(
         self,
-        db_path: str = 'data/chat_database.db',
+        registry=None,
         macula_db_path: str = 'data/macula_index.db',
     ) -> None:
-        super().__init__(db_path)
+        super().__init__(registry=registry)
         # SQLite connections are not safe for concurrent use across threads;
         # check_same_thread=False only suppresses the thread-affinity check,
         # it does not serialize access. We need to call _fetch_* helpers via
@@ -33,7 +34,8 @@ class ContextRetrievalService(BaseService):
         # per-call short-lived connection pattern: each helper opens a fresh
         # sqlite3.connect(), runs one query, and closes it. SQLite opens in
         # <1ms on local disk and the OS-level file lock handles serialization.
-        # See docs/implementation-status.md and todo.md for the rationale.
+        # The macula_index.db is a read-only data asset, NOT an application DB;
+        # nothing is ever written to it by the pipeline.
         self._macula_db_path = macula_db_path
 
     def close(self) -> None:
@@ -69,9 +71,10 @@ class ContextRetrievalService(BaseService):
     ) -> None:
         """Process every hit under this intent's search_results dict.
 
-        On any exception, logs to stderr, records a context_retrieval row
-        with error_text, and does NOT propagate.
+        Emits INFO + DEBUG log records (replacing the former DB write).
+        Per-intent exceptions are captured and logged; they do not propagate.
         """
+        started = time.monotonic()
         try:
             translation_count = 0
             hit_count = 0
@@ -107,6 +110,16 @@ class ContextRetrievalService(BaseService):
                 raw_response=json.dumps(raw_payload),
                 error_text=None,
                 num_tries=1,
+                extra={
+                    'event': 'context_retrieval',
+                    'intent_id': intent_id,
+                    'translation_count': translation_count,
+                    'hit_count': hit_count,
+                    'scored_word_count': scored_word_count,
+                    'kept_word_count': kept_word_count,
+                    'elapsed_ms': int((time.monotonic() - started) * 1000),
+                    'status': 'ok',
+                },
             )
         except Exception as exc:
             logger.exception("Context retrieval failed for intent %s", intent_id)
@@ -117,6 +130,12 @@ class ContextRetrievalService(BaseService):
                     session_uuid=session_uuid,
                     error_text=str(exc),
                     num_tries=1,
+                    extra={
+                        'event': 'context_retrieval',
+                        'intent_id': intent_id,
+                        'elapsed_ms': int((time.monotonic() - started) * 1000),
+                        'status': 'error',
+                    },
                 )
             except Exception:
                 logger.exception("Could not record context_retrieval error row")

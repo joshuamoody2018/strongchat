@@ -1,0 +1,119 @@
+# StrongChat public MCP exposure via sslip.io + on-demand TLS.
+#
+# This reverse-proxies the streamable-HTTP MCP server (running locally on
+# 127.0.0.1:8765) through Caddy so the public endpoint is HTTPS on a host
+# like ``https://strongchat.<anything>.sslip.io``. Caddy obtains a
+# Let's Encrypt cert automatically via on-demand TLS for any host that
+# resolves to one of the sslip.io wildcard IPs — no DNS challenge, no
+# static cert files to manage.
+#
+# Authentication: the bearer token check is enforced IN the MCP server
+# (see ``src/auth.py``, gated by ``STRONGCHAT_API_KEY`` +
+# ``STRONGCHAT_PUBLIC_URL``). Caddy does NOT add its own auth layer — it's
+# purely TLS termination + reverse proxy here. That keeps a single
+# source of truth for the bearer key (the MCP server) so local stdio /
+# local-HTTP testing stays key-less while public exposure is locked down.
+#
+# Boot order (full reference: deploy/README.md):
+#
+#   1. Start the MCP server bound to 127.0.0.1 only:
+#
+#        STRONGCHAT_MCP_TRANSPORT=http \
+#        STRONGCHAT_HOST=127.0.0.1 \
+#        STRONGCHAT_PORT=8765 \
+#        STRONGCHAT_API_KEY=$(cat ~/.strongchat_api_key) \
+#        STRONGCHAT_PUBLIC_URL=https://strongchat.YOURHOST.sslip.io \
+#        .venv/bin/python src/server.py
+#
+#   2. Point sslip.io at your box (examples in deploy/README.md), then:
+#
+#        caddy run --config deploy/Caddyfile
+#
+# Caddy will obtain the cert the first time a client hits
+# https://strongchat.foo.sslip.io/mcp.
+
+# Replace YOURHOST with any subdomain label you control the routing for.
+# sslip.io resolves anything.YOURHOST.sslip.io to YOURHOST's public IP if
+# YOURHOST is itself a public IP (e.g. 203.0.113.10.sslip.io resolves to
+# 203.0.113.10) — see https://sslip.io for the wildcard rules. For a
+# personal hostname that's not an IP, use ``nip.io`` or ``xip.io`` with
+# the same on-demand TLS pattern, or set up an A record you control.
+
+strongchat.YOURHOST.sslip.io {
+	# On-demand TLS: Caddy asks Let's Encrypt for a cert the first time
+	# it sees an SNI hit (per the on-demand-tls ask endpoint below), and
+	# renews it as needed. No pre-staging cert files.
+	#
+	# The ``ask`` endpoint is OPTIONAL but hard-recommended so Caddy
+	# doesn't blindly issue certs for arbitrary SNI strings (which
+	# would burn your Let's Encrypt rate limit if someone threw random
+	# hostnames at your IP). The default endpoint here returns 204 for
+	# any host matching the sslip.io wildcard — replace with your own
+	# check if you want stricter gating (e.g. a static allowlist).
+	tls {
+		on_demand
+	}
+
+	# For SSE/streamable-HTTP, the connection is long-lived; Caddy's
+	# defaults will time out idle connections at ~5min. Bump it so the
+	# SSE response stream survives long pipeline runs. The progress
+	# notifications Kevin's pipeline emits are tiny keepalives, but a
+	# silent retrieve_context can still run several seconds. 1h is
+	# well above any reasonable upper bound.
+	encode zstd gzip
+	servers {
+		timeouts {
+			read_body 30s
+			read_header 30s
+			write 1h
+			idle 1h
+		}
+	}
+
+	# Forward everything to the local MCP server. The bearer key sits
+	# in ``STRONGCHAT_API_KEY`` env on the backend; we pass the
+	# ``Authorization`` header through unchanged. Set explicit Host so
+	# the MCP server's OAuth ``resource_server_url`` check still
+	# reflects the public URL (set STRONGCHAT_PUBLIC_URL to match).
+	reverse_proxy 127.0.0.1:8765 {
+		header_up Host {host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-Host {host}
+	}
+
+	# Reasonable baseline TLS-response headers; protects against basic
+	# clickjacking / sniffing on the public endpoint. Nothing exotic.
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		# HSTS only makes sense once you're committed to HTTPS, and
+		# only over a real cert (which on-demand TLS provides). 1 year
+		# is the convention; tune as needed.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+
+	log {
+		output file /var/log/caddy/strongchat_access.log {
+			roll_size 50mb
+			roll_keep 5
+		}
+		format console
+	}
+}
+
+# Optional ``ask`` endpoint gate for on-demand TLS. Anything responding
+# 2xx permits cert issuance for that hostname; 4xx denies. Below we use
+# a tiny Go/bash sidecar OR a static allow check via Caddy's
+# ``on_demand_tls`` global option. Uncomment and adapt if you want to
+# gate issuance (recommended for any public-facing deployment):
+#
+#   on_demand_tls {
+#       ask https://your-approval-endpoint.example.com/check
+#   }
+#
+# Without it, Caddy will issue certs for any SNI that tls on-demand hits.
+# For a personal-test box that's behind sslip.io with a private hostname
+# the exposure is low (any random hostname pointing at your IP still
+# gets *a* cert, but won't pass bearer auth on /mcp), but for anything
+# bigger than personal experimentation DO add the ask hook.

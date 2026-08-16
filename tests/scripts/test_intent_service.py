@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Offline unit tests for IntentService.
 
-Mocks LLMWrapper.call_api so no live API calls are made. The only
-real dependency exercised is the cached ref_message_types schema from the
-local SQLite database.
+Mocks LLMWrapper.call_api so no live API calls are made. Message-type
+configuration now comes from the in-process registry built at import time;
+there is no application database.
 """
 
 import asyncio
@@ -17,7 +17,6 @@ from unittest.mock import AsyncMock, patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 from config import INTENT_GENERATION_SCHEMA
-from config.cache import GlobalReferenceCache
 from services.intent import IntentService
 from services.llm.aimessage import AIMessage
 

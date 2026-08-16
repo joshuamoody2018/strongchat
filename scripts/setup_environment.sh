@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 # Idempotent local development environment bootstrap for StrongChat.
 # Installs system dependencies, creates a Python .venv, installs requirements,
-# creates the chat DB, downloads and ingests the Macula Greek + Hebrew
-# corpora + STEPBible TBESG/LSJ/TBESH lexicons, and runs pipeline
-# message-type migrations.
+# downloads and ingests the Macula Greek + Hebrew
+# corpora + STEPBible TBESG/LSJ/TBESH lexicons. There is NO application
+# database; the audit trail is the JSONL log under data/logs/.
+#
+# At the end, prompts to install Caddy (for the public-exposure path in
+# deploy/) via scripts/install_caddy.sh. Skip with --no-caddy,
+# SKIP_CADDY=1, or by piping input (non-interactive runs always skip
+# the prompt and just print the manual-run hint).
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-DB_PATH="data/chat_database.db"
 VENV_DIR=".venv"
 PYTHON="$VENV_DIR/bin/python"
 PIP="$VENV_DIR/bin/pip"
@@ -83,14 +87,6 @@ log "Installing Python requirements..."
 log "Ensuring data directory exists..."
 mkdir -p data
 
-log "Ensuring SQLite database exists at $DB_PATH..."
-if [ ! -f "$DB_PATH" ]; then
-    "$PYTHON" scripts/create_new_database.py --db-path "$DB_PATH"
-    log "Database created and seeded."
-else
-    log "Database already exists; skipping schema creation and seeding."
-fi
-
 log "Downloading Macula Greek corpus (Clear-Bible/macula-greek, CC BY 4.0)..."
 if [ ! -f data/macula/macula-greek.tsv ]; then
     log "Downloading Macula Greek corpus (Clear-Bible/macula-greek, CC BY 4.0)..."
@@ -131,6 +127,40 @@ else
   log "ChromaDB already populated at data/chroma/chroma.sqlite3; skipping ingest."
 fi
 
+# ---------------------------------------------------------------------------
+# Optional: install Caddy for the public-exposure path (deploy/).
+# Prompts interactively after dev setup completes. Non-interactive runs
+# (piped stdin, CI=1, SKIP_CADDY=1, or --no-caddy) skip the prompt and
+# just print the manual-run hint so setup stays non-blocking in CI.
+# The actual install lives in scripts/install_caddy.sh (idempotent,
+# reusable standalone) so this script stays focused on the dev env.
+# ---------------------------------------------------------------------------
+if [ "${SKIP_CADDY:-0}" = "1" ] || [ "${1:-}" = "--no-caddy" ]; then
+    log "Caddy install skipped (--no-caddy / SKIP_CADDY=1)."
+    log "  Run ./scripts/install_caddy.sh later if you want public exposure."
+elif [ "${CI:-0}" = "1" ] || ! [ -t 0 ]; then
+    # No interactive TTY (piped stdin, CI, etc.) — don't block.
+    log "Non-interactive shell detected; skipping Caddy install prompt."
+    log "  Run ./scripts/install_caddy.sh later for public-exposure setup."
+else
+    echo
+    read -r -p "[setup] Dev environment ready. Install Caddy for public internet access to this MCP server? [y/N] " _ans
+    case "${_ans:-}" in
+        y|Y|yes|YES)
+            log "Running scripts/install_caddy.sh ..."
+            bash "$REPO_ROOT/scripts/install_caddy.sh" \
+                || log "Caddy install failed (non-fatal); see scripts/install_caddy.sh output above."
+            ;;
+        *)
+            log "Skipping Caddy install. Run ./scripts/install_caddy.sh later if you change your mind."
+            ;;
+    esac
+fi
+
 log "Environment setup complete."
-log "Macula Hebrew + Greek data ingested, ChromaDB populated. To re-run: delete data/macula_index.db, data/macula/*.tsv, data/bible/*.json, or data/chroma/ and re-run this script."
+log "Macula Hebrew + Greek data ingested, ChromaDB populated."
+log "No application database is required — audit trail is JSONL at data/logs/strongchat.log"
+log "Run the MCP server with: $VENV_DIR/bin/python src/server.py"
+log "Run the CLI smoke-test with: $VENV_DIR/bin/python src/main.py \"<query>\""
 log "Activate the virtual environment with: source $VENV_DIR/bin/activate"
+log "For public exposure (sslip.io + Caddy + bearer auth), run: ./deploy/bootstrap.sh"

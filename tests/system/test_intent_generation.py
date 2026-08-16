@@ -1,26 +1,25 @@
 #!/usr/bin/env python3
 """Live system test for intent generation via OpenRouter.
 
-This test calls the real OpenRouter API for three representative probes and
-validates that IntentService.generate_intents returns structured intents that
-satisfy the INTENT_GENERATION_SCHEMA. It also verifies that each call is
-recorded in the database as a single intent_generation message.
-
-Run with the environment loaded:
-    set -a; . ./.env; set +a; .venv/bin/python tests/system/test_intent_generation.py
+Calls the real OpenRouter API for three representative probes and validates
+that IntentService.generate_intents returns structured intents satisfying
+the INTENT_GENERATION_SCHEMA. The audit trail is now JSONL log records;
+this test asserts the structured response shape rather than session rows.
+There is no application DB.
 """
 
 import asyncio
+import logging
 import os
 import sys
+import uuid
 
 from dotenv import load_dotenv
 
-# Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
+from config.logging import configure_logging
 from services.intent import IntentService
-from services.sqlite.database import ChatDatabase
 
 
 PROBES = [
@@ -33,7 +32,6 @@ PROBES = [
 def validate_intents(intents: list[dict]) -> None:
     """Validate the intents list against the task's structural assertions."""
     assert 1 <= len(intents) <= 5, f"expected 1-5 intents, got {len(intents)}"
-
     primary_count = 0
     for intent in intents:
         assert intent.get("interpretation"), "intent missing non-empty interpretation"
@@ -42,49 +40,38 @@ def validate_intents(intents: list[dict]) -> None:
         assert len(intent.get("themes", [])) > 0, "intent missing themes"
         if intent.get("is_primary"):
             primary_count += 1
-
     assert primary_count >= 1, "expected at least one primary intent"
 
 
-async def test_probe(service: IntentService, db: ChatDatabase, probe: str) -> None:
-    """Generate intents for one probe and validate the result plus DB record."""
-    session_uuid = db.create_session(
-        name=f"intent-test: {probe[:50]}",
-        created_by="test",
-    )
-    print(f"  Session: {session_uuid}")
-
-    result = await service.generate_intents(probe, session_uuid)
-
+async def test_probe(service: IntentService, probe: str) -> None:
+    """Generate intents for one probe and validate the response shape."""
+    correlation_id = f"intent-test-{uuid.uuid4()}"
+    print(f"  Correlation id: {correlation_id}")
+    result = await service.generate_intents(probe, correlation_id)
     intents = result["intents"]
     print(f"  Intents returned: {len(intents)}")
     validate_intents(intents)
-
-    messages = db.get_messages_by_session_and_type(session_uuid, "intent_generation")
-    assert len(messages) == 1, f"expected 1 intent_generation message, got {len(messages)}"
-    assert messages[0]["raw_response"] is not None, "raw_response must not be null"
-
+    assert result["message_uuid"], "message_uuid must be non-empty"
     print(f"  PASS: {probe[:50]}")
 
 
 async def run_tests() -> bool:
     """Run the live intent generation test for all probes."""
     print("=== Live Intent Generation System Test ===\n")
-
     load_dotenv()
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    if not api_key or api_key == "your_openrouter_api_key_here":
-        print("SKIP: OPENROUTER_API_KEY is not present in the environment.")
+    api_key = os.getenv("OPENROUTER_STRONGCHAT_DEFAULT_API_KEY")
+    if not api_key or api_key == "your_OPENROUTER_STRONGCHAT_DEFAULT_API_KEY_here":
+        print("SKIP: OPENROUTER_STRONGCHAT_DEFAULT_API_KEY is not present in the environment.")
         return True
 
+    configure_logging()
     service = IntentService()
-    db = service.db
 
     all_passed = True
     for probe in PROBES:
         print(f"Probe: {probe}")
         try:
-            await test_probe(service, db, probe)
+            await test_probe(service, probe)
         except AssertionError as exc:
             print(f"  FAIL: {exc}")
             all_passed = False
@@ -92,7 +79,7 @@ async def run_tests() -> bool:
             print(f"  ERROR: {exc}")
             all_passed = False
 
-    db.close()
+    service.llm.close()
     print("\n=== Result ===")
     print("PASS" if all_passed else "FAIL")
     return all_passed

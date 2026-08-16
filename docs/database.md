@@ -1,180 +1,151 @@
 # Database Architecture
 
-## Databases
-
-StrongChat uses TWO separate databases:
-
-1. **`data/chat_database.db`** — Chat database for sessions, messages, ref_message_types, and intents
-2. **`data/macula_index.db`** — Macula Greek original-language index (macula_tokens, strongs_frequency, lexicon_definitions)
+> There is **no application database** in the MCP era. This document covers
+> the read-only data assets and the JSONL audit log that replaces the
+> former SQLite `sessions` / `messages` / `ref_message_types` tables.
 
 ## Overview
 
-SQLite database layer for chat sessions, messages, and structured intent storage. Designed for auditability and efficient retrieval.
+StrongChat is a stateless MCP server. Nothing persists between calls. The
+audit trail is a JSONL log file (cross-process safe via
+`concurrent-log-handler`); the returned `PipelineResult` bundle IS the
+auditable artifact for the calling agent. Two read-only data assets are
+NOT stripped because they are corpus/data, not application state.
 
-## Schema Design
+## Read-only data assets
 
-### Core Tables
+### `data/chroma/` — ChromaDB persistent verse vectors
 
-#### Sessions Table
-```sql
-CREATE TABLE sessions (
-    uuid TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_by TEXT
-);
-```
+- **Collections**: `kjv_verses`, `web_verses` (cosine HNSW space).
+- **Content**: ~31,000 verse rows per translation, each with `text`,
+  `book` (English name), `osis`, `chapter`, `verse`, `translation`
+  metadata, and the verse embedding vector.
+- **Read path**: `VerseStore` (`src/services/vectordb/store.py`) wraps
+  `chromadb.PersistentClient`.
+- **Ingest**: `scripts/ingest_corpus.py`. Idempotent upsert;
+  re-running overwrites existing IDs.
 
-#### Messages Table
-```sql
-CREATE TABLE messages (
-    uuid TEXT PRIMARY KEY,
-    session_uuid TEXT NOT NULL,
-    input TEXT,
-    output TEXT,
-    created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (session_uuid) REFERENCES sessions (uuid)
-);
-```
+### `data/macula_index.db` — Macula Greek + Hebrew original-language index
 
-#### ref_message_types Table
-```sql
-CREATE TABLE ref_message_types (
-    slug TEXT PRIMARY KEY,
-    step_name TEXT NOT NULL,
-    creator_type TEXT NOT NULL,  -- 'human', 'llm', or 'programmatic'
-    request_schema TEXT,         -- JSON schema for validation
-    model_slug TEXT,
-    temperature REAL,
-    additional_model_settings TEXT,  -- JSON for model-specific settings
-    max_retries INTEGER DEFAULT 3,
-    is_active INTEGER DEFAULT 1,
-    description TEXT,
-    prompt_template TEXT
-);
-```
+A single SQLite database (read-only at runtime), built by the setup
+script from the Macula Greek (SBLGNT) and Macula Hebrew (WLC) corpora and
+the STEPBible TBESG / LSJ / TBESH lexicons.
 
-#### Intents Table
-```sql
-CREATE TABLE intents (
-    uuid TEXT PRIMARY KEY,
-    message_uuid TEXT NOT NULL,
-    intent TEXT,  -- JSON string for structured intent data
-    FOREIGN KEY (message_uuid) REFERENCES messages (uuid)
-);
-```
+#### `macula_tokens`
+- **Schema**: `row_id, book_num, book_osis, chapter, verse, word_pos,
+  surface, lemma, strongs, morph, pos, gloss`
+- **Content**: ~137k NT Greek tokens (book_num ≥ 40) + ~80 MB OT Hebrew
+  tokens (book_num < 40)
+- **Source**: `scripts/build_macula_index.py --testament {greek,hebrew}`
+- **License**: CC BY 4.0 (Macula Greek, Macula Hebrew WLC)
 
-**Note**: The `messages` table has a foreign key to `ref_message_types` (the modern pattern). The existing `intents` table may be deprecated as intent data is now stored directly in the `messages` table via the `intent_generation` message type.
+#### `strongs_frequency`
+- **Schema**: `strongs_number TEXT PRIMARY KEY, occurrence_count INTEGER,
+  testament TEXT NOT NULL` (`testament` is `'NT'` or `'OT'`)
+- **Content**: Strong's number → corpus occurrence count, partitioned by
+  testament so Greek and Hebrew bare-int keys don't collide.
+- **Source**: `scripts/build_strongs_frequency.py --testament {greek,hebrew}`
 
-## Data Layer Components
+#### `lexicon_definitions`
+- **Schema**: `strongs_number, lexicon_source, sense_index, definition`
+  (PK on the triple)
+- **Content**:
+  - Greek NT: `tbESG` (Tyndale Brief Extended Greek) + `lsj` (Liddell-Scott
+    Jones) — union of both, concatenated per sense.
+  - Hebrew OT: `tbESH` (Tyndale Brief Extended Hebrew)
+- **Source**: `scripts/build_lexicon_index.py --testament {greek,hebrew,both}`
+- **License**: CC BY 4.0 (STEPBible)
 
-### Database Service (`src/services/sqlite/database.py`)
-```python
-class ChatDatabase:
-    """SQLite database wrapper with context management"""
-    
-    Methods:
-    - create_session() - Create new chat session
-    - create_message() - Store user/AI messages
-    - create_intent() - Store structured intent data
-    - get_sessions() - List all sessions
-    - get_messages() - Retrieve session messages
-    - get_intents_for_message() - Get intent data for message
-```
+The `ContextRetrievalService` reads these tables via per-call short-lived
+`sqlite3.connect` (per-call to avoid cross-thread issues; opens in <1ms).
+The service derives language ('greek' / 'hebrew') from each hit's first
+token's `book_num` and routes frequency / lexicon / occurrence-cache
+lookups by testament so Greek and Hebrew bare-int Strong's keys do not
+conflate.
 
-### Database Utilities (`src/services/sqlite/utils.py`)
-```python
-Functions:
-- create_database() - Initialize database schema
-- check_database() - Display database structure
-- get_database_stats() - Get usage statistics
-```
+## Audit trail — JSONL log (no application DB)
 
-## Data Flow
+The audit trail is the JSONL log file under `data/logs/strongchat.log`
+(10 MB rotation × 5 backups). Each record is one JSON object per line,
+keyed by `correlation_id` (a per-call UUID used only for log slicing).
 
-1. **User Input** → `create_message()` → Store in messages table
-2. **Intent Analysis** → `create_intent()` → Store JSON string in intents table
-3. **AI Response** → `create_message()` → Store output in messages table
-4. **Session Management** → `create_session()` → Track conversation context
+### Configuration
 
-## Macula Greek Index (data/macula_index.db)
+| Env var | Default | Description |
+|---------|---------|-------------|
+| `STRONGCHAT_LOG_LEVEL` | `ERROR` (if unset) | One of `ERROR`, `INFO`, `DEBUG` |
+| `STRONGCHAT_LOG_FILE` | `data/logs/strongchat.log` | JSONL log path (dir auto-created) |
 
-The Macula Greek index is a separate SQLite database containing original-language data for New Testament Greek:
+### Levels
 
-### macula_tokens Table
-- **Schema**: `row_id INTEGER PRIMARY KEY, book_num INTEGER, book_osis TEXT, chapter INTEGER, verse INTEGER, word_pos INTEGER, surface TEXT, lemma TEXT, strongs TEXT, morph TEXT, pos TEXT`
-- **Content**: 137,741 tokens across 27 NT books from Macula Greek SBLGNT
-- **Source**: `scripts/build_macula_index.py`
-- **License**: CC BY 4.0
+| Level | What lands |
+|---|---|
+| `ERROR` (default) | exceptions, retry-exhausted, API hard failures |
+| `INFO` | one record per pipeline step with `event`, `elapsed_ms`, `status` |
+| `DEBUG` | INFO + full audit: `prompt`, `raw_response`, embedded texts, context bundle payloads (same field set as the former `messages` table) |
 
-### strongs_frequency Table
-- **Schema**: `strongs TEXT PRIMARY KEY, frequency_count INTEGER`
-- **Content**: 5,440 NT Strong's numbers with frequency counts
-- **Source**: `scripts/build_strongs_frequency.py`
-- **Purpose**: Used for scoring in context retrieval
+### Record shape
 
-### lexicon_definitions Table
-- **Schema**: `strongs TEXT, sense_id INTEGER, lexicon_source TEXT, definitions TEXT, glosses TEXT`
-- **Content**: ~16,000 senses across TBESG + LSJ lexicons
-- **Source**: `scripts/build_lexicon_index.py`
-- **License**: CC BY 4.0 (TBESG + LSJ)
-
-### Usage
-The context retrieval service queries this database to enrich retrieved verses with original-language data, including lemma, Strong's number, morphological information, and lexicon definitions.
-
-## Structured Intent Storage
-
-### Migration Plan
-- **Current**: Simple intent strings ("greeting", "question")
-- **Future**: JSON strings with structured intent data
-
-### Example Storage Format
 ```json
-{
-  "query_analysis": {
-    "original_query": "why do bad things happen",
-    "core_questions": ["Why does suffering occur?"],
-    "context_clues": ["suffering", "pain"]
-  },
-  "intents": [
-    {
-      "intent_id": "theodicy",
-      "interpretation": "Understanding the problem of evil",
-      "keywords_explicit": ["bad", "things", "happen"],
-      "keywords_inferred": ["suffering", "evil", "pain"],
-      "themes": ["theodicy", "suffering"],
-      "confidence": 0.9,
-      "is_primary": true
-    }
-  ]
-}
+{"ts":"2026-08-16T12:00:00.123Z","level":"INFO","event":"llm_call","correlation_id":"8f3e...","slug":"intent_generation","attempts":1,"elapsed_ms":420,"status":"ok"}
 ```
 
-## Integration Points
+DEBUG-level audit records add `prompt` + `raw_response` fields (the same
+`unique_prompt` + `raw_response` columns the former SQLite `messages` table
+held). `grep <correlation_id>` or `jq` on a DEBUG log reconstructs the old
+audit table per pipeline run.
 
-- **LLM Framework**: Stores structured intent responses
-- **Chat Interface**: Provides session-based conversation history
-- **Audit Trail**: All intent decisions stored in database
-- **Pipeline Integration**: Structured data available for downstream processing
+### Cross-process safety
+
+`ConcurrentRotatingFileHandler` from `concurrent-log-handler` uses
+`fcntl` advisory locking + atomic rotation rename. Multiple MCP server
+instances (or any parallel Python process) can append safely to the same
+JSONL log file regardless of record size.
+
+### Where logging replaces each former DB write
+
+| Former DB write site | Now |
+|---|---|
+| `LLMWrapper.call_api` success | INFO `llm_call` + DEBUG `llm_call_audit` records |
+| `LLMWrapper.call_api` final failure | ERROR `llm_call` record with `error` field |
+| `EmbeddingService.embed_texts` INFO summary | INFO `embedding_generation` + DEBUG audit record |
+| `ContextRetrievalService._process_intent` summary | INFO `context_retrieval` (intent_id, hit_count, kept_word_count, elapsed_ms, status) + DEBUG audit row carrying full bundles payload |
+| `PipelineRunner.run` `create_session` | INFO `pipeline_start` + `pipeline_end` records keyed by `correlation_id` |
+| `scripts/ingest_corpus.py` `corpus_ingest` row | INFO `corpus_ingest` record (translation, verse_count, batch_count, elapsed_ms) |
+
+## Static message-type config (no `ref_message_types` table)
+
+The former `ref_message_types` SQLite table is replaced by an in-process
+registry of frozen dataclasses:
+
+- `src/config/llm_models.py` — `@dataclass(frozen=True) MessageTypeDef` for
+  `intent_generation`, `hyde_generation`, `embedding_generation`,
+  `context_retrieval`, `corpus_ingest`, `human_input`.
+- `src/config/registry.py` — `MessageTypeDefRegistry` with a process-wide
+  singleton built at import time (`DEFAULT_REGISTRY`).
+
+Read-only after import; safe to share across asyncio tasks and worker
+threads without locking. Tests that need a fixture registry construct a
+new `MessageTypeDefRegistry` (or call `DEFAULT_REGISTRY.reset([...])`).
+
+## Performance considerations
+
+- The `ContextRetrievalService` SQLite reads use per-call short-lived
+  connections (each helper opens, queries, closes). SQLite opens in <1ms
+  on local disk and the OS-level file lock handles serialization across
+  parallel `asyncio.to_thread` calls.
+- Embedding vectors are dropped from the serialized bundle returned to the
+  agent (too large, redundant downstream of retrieval).
+- No SQLite writes per pipeline run (the former one session + N hyde +
+  1 embedding + N context inserts per run are gone).
 
 ## File Locations
 
-- Implementation: `src/services/sqlite/`
-- Database: `data/chat_database.db`
-- Macula Index: `data/macula_index.db`
-- Utilities: `scripts/create_new_database.py` (schema creation + ref_message_types seeding)
-- Macula Scripts: `scripts/download_macula_greek.py`, `scripts/build_macula_index.py`, `scripts/build_strongs_frequency.py`, `scripts/build_lexicon_index.py`
-
-## Performance Considerations
-
-- Indexes on foreign keys for efficient joins
-- UUID-based primary keys for distributed systems
-- JSON storage for flexible schema evolution
-- Context managers for connection pooling
-
-## Testing
-
-- ✅ Database operations tests
-- ✅ CRUD operations validation
-- 🚧 Concurrent access tests (planned)
-- 🚧 Performance benchmarks (planned)
+- Config source of truth: `src/config/llm_models.py`, `src/config/registry.py`
+- Logging setup: `src/config/logging.py`
+- JSONL log file: `data/logs/strongchat.log` (path configurable)
+- Chroma assets: `data/chroma/`
+- Macula assets: `data/macula_index.db`, `data/macula/*.tsv`
+- Macula build scripts: `scripts/build_macula_index.py`,
+  `scripts/build_strongs_frequency.py`, `scripts/build_lexicon_index.py`
+- Corpus ingest: `scripts/ingest_corpus.py`

@@ -1,4 +1,4 @@
-"""Configuration package initialization"""
+"""Configuration package initialization."""
 
 from .schemas import (
     HYDE_GENERATION_SCHEMA,
@@ -17,6 +17,8 @@ from .context_constants import (
     composite_score,
     get_pos_weight,
 )
+from .llm_models import MessageTypeDef, DEFAULT_MESSAGE_TYPES
+from .registry import MessageTypeDefRegistry, DEFAULT_REGISTRY
 
 __all__ = [
     'HYDE_GENERATION_SCHEMA',
@@ -30,4 +32,8 @@ __all__ = [
     'MIN_WORDS_AFTER_TRIM',
     'composite_score',
     'get_pos_weight',
+    'MessageTypeDef',
+    'DEFAULT_MESSAGE_TYPES',
+    'MessageTypeDefRegistry',
+    'DEFAULT_REGISTRY',
 ]

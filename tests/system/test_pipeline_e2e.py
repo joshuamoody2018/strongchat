@@ -2,9 +2,9 @@
 """Live end-to-end pipeline integration test.
 
 Runs the full PipelineRunner against the real OpenRouter API and the live
-ChromaDB collections, then validates the result shape and the SQLite audit
-trail. Skips loudly when the API key is missing or the local verse collections
-are not fully populated.
+ChromaDB collections, then validates the returned bundle shape. Audit trail
+is JSONL log records; no application DB. Skips loudly when the API key is
+missing or the local verse collections are not fully populated.
 
 Run with the environment loaded:
     set -a; . ./.env; set +a; .venv/bin/python tests/system/test_pipeline_e2e.py
@@ -13,18 +13,15 @@ Run with the environment loaded:
 import asyncio
 import os
 import re
-import sqlite3
 import sys
-import tempfile
 
 import chromadb
 from dotenv import load_dotenv
 
-# Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
-from services.pipeline.runner import PipelineRunner
-from services.sqlite.database import ChatDatabase
+from config.logging import configure_logging
+from services.pipeline import PipelineRunner, pipeline_result_to_bundle
 
 
 QUERY = "why do bad things happen to good people"
@@ -55,46 +52,6 @@ def _collection_counts_ok() -> tuple[bool, str]:
     return True, ""
 
 
-def _get_session_messages(db: ChatDatabase, session_uuid: str) -> list[dict]:
-    """Return every message recorded for a session."""
-    return db.get_messages_by_session_and_type(session_uuid)
-
-
-def _get_ref_slugs(db: ChatDatabase) -> set[str]:
-    """Return all slugs present in ref_message_types."""
-    cursor = db.cursor.execute("SELECT slug FROM ref_message_types")
-    return {row[0] for row in cursor.fetchall()}
-
-
-def _assert_audit_trail(db: ChatDatabase, session_uuid: str, num_intents: int) -> None:
-    """Validate message counts and orphan-check the session audit trail."""
-    messages = _get_session_messages(db, session_uuid)
-    ref_slugs = _get_ref_slugs(db)
-
-    orphan_slugs = {
-        msg['message_type_slug']
-        for msg in messages
-        if msg['message_type_slug'] not in ref_slugs
-    }
-    assert not orphan_slugs, (
-        f"orphan message_type_slug values found: {sorted(orphan_slugs)}"
-    )
-
-    counts: dict[str, int] = {}
-    for msg in messages:
-        counts[msg['message_type_slug']] = counts.get(msg['message_type_slug'], 0) + 1
-
-    assert counts.get('intent_generation') == 1, (
-        f"expected 1 intent_generation message, got {counts.get('intent_generation')}"
-    )
-    assert counts.get('hyde_generation') == num_intents, (
-        f"expected {num_intents} hyde_generation messages, got {counts.get('hyde_generation')}"
-    )
-    assert counts.get('embedding_generation') == 1, (
-        f"expected 1 embedding_generation message, got {counts.get('embedding_generation')}"
-    )
-
-
 def _print_top_hits(result) -> None:
     """Print the closest hit reference and snippet for each translation."""
     hits_by_translation: dict[str, list[dict]] = {}
@@ -123,9 +80,7 @@ def _validate_references(result) -> None:
 def _validate_results(result) -> None:
     """Validate result counts, shape, and non-empty retrieval for both translations."""
     num_intents = len(result.intents)
-    assert 1 <= num_intents <= 5, (
-        f"expected 1-5 intents, got {num_intents}"
-    )
+    assert 1 <= num_intents <= 5, f"expected 1-5 intents, got {num_intents}"
     assert len(result.hyde_docs) == num_intents, (
         f"expected {num_intents} hyde_docs, got {len(result.hyde_docs)}"
     )
@@ -142,14 +97,32 @@ def _validate_results(result) -> None:
     _validate_references(result)
 
 
+def _validate_bundle_shape(result) -> None:
+    """The serialized JSON bundle carries the correlation id + per-intent traces."""
+    bundle = pipeline_result_to_bundle(result)
+    assert bundle["correlation_id"] == result.session_uuid
+    assert bundle["query"] == result.query
+    assert isinstance(bundle["traces"], list)
+    assert len(bundle["traces"]) == len(result.intents)
+    for trace in bundle["traces"]:
+        assert "intent_id" in trace
+        assert "intent_data" in trace
+        assert "hyde_document" in trace
+        assert "search_results" in trace
+        # Embeddings must be dropped (never serialized to the agent).
+        for hits in trace["search_results"].values():
+            for hit in hits:
+                assert "embedding" not in hit
+
+
 async def run_tests() -> bool:
     """Run the live end-to-end pipeline test."""
     print("=== Live Pipeline End-to-End Integration Test ===\n")
 
     load_dotenv()
-    api_key = os.getenv('OPENROUTER_API_KEY')
+    api_key = os.getenv('OPENROUTER_STRONGCHAT_DEFAULT_API_KEY')
     if not api_key or api_key == 'your_openrouter_api_key_here':
-        print("SKIP: OPENROUTER_API_KEY is not present in the environment.")
+        print("SKIP: OPENROUTER_STRONGCHAT_DEFAULT_API_KEY is not present in the environment.")
         return True
 
     ok, reason = _collection_counts_ok()
@@ -157,6 +130,7 @@ async def run_tests() -> bool:
         print(reason)
         return True
 
+    configure_logging()
     runner = PipelineRunner()
     try:
         result = await runner.run(
@@ -164,12 +138,12 @@ async def run_tests() -> bool:
             top_k=5,
             translations=('kjv', 'web'),
         )
-        print(f"Session: {result.session_uuid}")
+        print(f"Correlation id: {result.session_uuid}")
         print(f"Intents: {len(result.intents)}")
         print(f"HyDE docs: {len(result.hyde_docs)}")
 
         _validate_results(result)
-        _assert_audit_trail(runner.db, result.session_uuid, len(result.intents))
+        _validate_bundle_shape(result)
         _print_top_hits(result)
 
         print("\n=== Result ===")
@@ -186,72 +160,48 @@ async def run_tests() -> bool:
 
 
 def run_orphan_negative_check() -> None:
-    """Deliberate negative: a fixture DB with a bogus message type slug.
+    """Deliberate negative: validate that the bundle never carries embeddings.
 
-    Proves that the orphan check flags a row whose message_type_slug is absent
-    from ref_message_types.
+    The original SQLite-era orphan check verified FK integrity. Now that
+    there is no application DB, the equivalent regression guard asserts that
+    the serialized bundle drops embedding vectors.
     """
-    schema_sql = """
-        CREATE TABLE ref_message_types (
-            slug TEXT PRIMARY KEY,
-            step_name TEXT,
-            creator_type TEXT,
-            request_schema TEXT,
-            model_slug TEXT,
-            temperature REAL,
-            additional_model_settings TEXT,
-            max_retries INTEGER,
-            is_active INTEGER,
-            description TEXT,
-            prompt_template TEXT
-        );
-        CREATE TABLE sessions (
-            uuid TEXT PRIMARY KEY,
-            name TEXT,
-            created_by TEXT,
-            created_on TEXT DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE messages (
-            uuid TEXT PRIMARY KEY,
-            session_uuid TEXT,
-            message_type_slug TEXT,
-            unique_prompt TEXT,
-            raw_response TEXT,
-            created_at TEXT,
-            response_at TEXT,
-            num_tries INTEGER,
-            error_text TEXT
-        );
-        INSERT INTO ref_message_types (slug) VALUES ('valid_slug');
-        INSERT INTO sessions (uuid, name, created_by) VALUES ('sess-1', 'neg', 'test');
-        INSERT INTO messages (uuid, session_uuid, message_type_slug, unique_prompt, created_at)
-            VALUES ('msg-1', 'sess-1', 'bogus_slug', 'prompt', '2026-07-28T00:00:00');
-    """
-    with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as handle:
-        db_path = handle.name
+    from dataclasses import dataclass, field
+    from typing import Any, Dict, List, Optional
+    from services.pipeline.runner import IntentTrace, PipelineResult
+    from services.pipeline.serializer import pipeline_result_to_bundle
 
-    try:
-        conn = sqlite3.connect(db_path)
-        conn.executescript(schema_sql)
-        conn.commit()
-        conn.close()
-
-        db = ChatDatabase(db_path)
-        messages = _get_session_messages(db, 'sess-1')
-        ref_slugs = _get_ref_slugs(db)
-        orphan_slugs = {
-            msg['message_type_slug']
-            for msg in messages
-            if msg['message_type_slug'] not in ref_slugs
-        }
-        db.close()
-
-        assert orphan_slugs == {'bogus_slug'}, (
-            f"expected orphan check to flag bogus_slug, got {orphan_slugs}"
-        )
-        print("Orphan negative check: PASS (bogus_slug flagged)")
-    finally:
-        os.unlink(db_path)
+    trace = IntentTrace(
+        intent_id="neg-test",
+        intent_data={"intent_id": "neg-test"},
+        hyde_document="hyde",
+        embedding=[0.1, 0.2, 0.3],
+        search_results={
+            "kjv": [
+                {
+                    "id": "k1",
+                    "text": "loved",
+                    "reference": "John 3:16",
+                    "distance": 0.0,
+                    # Pretend the retrieval stage leaked an embedding onto the hit.
+                    "embedding": [0.4, 0.5],
+                }
+            ]
+        },
+    )
+    result = PipelineResult(
+        session_uuid="neg-correlation",
+        query="neg",
+        traces={"neg-test": trace},
+    )
+    bundle = pipeline_result_to_bundle(result)
+    assert "embedding" not in bundle["traces"][0], (
+        "bundle trace leaked the per-intent embedding"
+    )
+    assert "embedding" not in bundle["traces"][0]["search_results"]["kjv"][0], (
+        "bundle hit leaked the embedding vector — serializer regressed"
+    )
+    print("Orphan negative check: PASS (_embeddings dropped from bundle)")
 
 
 if __name__ == '__main__':
