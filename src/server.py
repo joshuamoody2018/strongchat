@@ -219,8 +219,21 @@ async def _setup_and_build_mcp():
     Pulled out of _main so it doesn't need to be async-then-sync-then-async
     again.
     """
-    # Load .env so OPENROUTER_STRONGCHAT_DEFAULT_API_KEY etc. are available; preserve an
-    # explicitly-unset key in the parent shell (matches src/main.py behaviour).
+    # Load .env so OPENROUTER_STRONGCHAT_DEFAULT_API_KEY etc. are
+    # available; preserve an explicitly-unset key in the parent shell
+    # (matches src/main.py behaviour). This is deliberate for the
+    # OpenRouter LLM key only (so a developer can `unset` it on a box
+    # with a populated .env to exercise the no-API-key code path).
+    #
+    # NOTE: STRONGCHAT_API_KEY (bearer secret for the public MCP
+    # endpoint, see auth.py) and STRONGCHAT_PUBLIC_URL are NOT
+    # preserve-unset here — they MUST load from .env in production
+    # (where the server is typically launched with no env in the
+    # shell, e.g. via systemd `EnvironmentFile=.env`). Test isolation
+    # for the auth tests instead relies on a clean .env in CI; on a
+    # post-bootstrap dev box the http auth tests can fail locally
+    # (load_dotenv re-injects the keys the test popped). That is
+    # pre-existing test-environment fragility, not a code bug.
     had_api_key = "OPENROUTER_STRONGCHAT_DEFAULT_API_KEY" in os.environ
     load_dotenv()
     if not had_api_key and "OPENROUTER_STRONGCHAT_DEFAULT_API_KEY" in os.environ:
